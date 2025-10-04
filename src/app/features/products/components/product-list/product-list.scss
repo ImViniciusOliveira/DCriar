@@ -1,0 +1,28 @@
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+
+  h1 {
+    margin: 0;
+    span {
+      font-size: 1rem;
+      color: #6c757d; // var(--text-muted-color)
+      font-weight: 400;
+    }
+  }
+}
+
+.table-container {
+  background-color: white;
+  border: 1px solid #dee2e6; // var(--border-color)
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.stock-info small {
+  color: #6c757d; // var(--text-muted-color)
+  font-size: 0.85rem;
+}

@@ -1,1 +1,50 @@
-<p>product-list works!</p>
+<div class="page-header">
+  <h1>Produtos Acabados <span>(Prontos para Venda)</span></h1>
+  <button mat-flat-button color="primary">
+    <mat-icon>add</mat-icon>
+    Cadastrar Novo Produto
+  </button>
+</div>
+
+<div class="table-container">
+  <table mat-table [dataSource]="products()">
+    <!-- Coluna SKU -->
+    <ng-container matColumnDef="sku">
+      <th mat-header-cell *matHeaderCellDef>SKU</th>
+      <td mat-cell *matCellDef="let product">{{ product.sku }}</td>
+    </ng-container>
+
+    <!-- Coluna Nome -->
+    <ng-container matColumnDef="nome">
+      <th mat-header-cell *matHeaderCellDef>Produto</th>
+      <td mat-cell *matCellDef="let product">{{ product.nome }}</td>
+    </ng-container>
+
+    <!-- Coluna Estoque -->
+    <ng-container matColumnDef="estoque">
+      <th mat-header-cell *matHeaderCellDef>Estoque Total</th>
+      <td mat-cell *matCellDef="let product" class="stock-info">
+        <strong>{{ product.estoqueFisicoTotal }} pacotes</strong>
+        <br />
+        <small>({{ product.estoqueFisicoTotal * product.unidadesPorProduto }} unidades)</small>
+      </td>
+    </ng-container>
+
+    <!-- Coluna Ações -->
+      <ng-container matColumnDef="acoes">
+        <th mat-header-cell *matHeaderCellDef>Ações</th>
+        <td mat-cell *matCellDef="let product">
+          <button mat-icon-button color="primary" title="Visualizar" (click)="onView(product)">
+            <mat-icon>visibility</mat-icon>
+          </button>
+          <button mat-icon-button color="accent" title="Editar" (click)="onEdit(product)">
+            <mat-icon>edit</mat-icon>
+          </button>
+          <button mat-icon-button color="warn" title="Excluir" (click)="onDelete(product)">
+            <mat-icon>delete</mat-icon>
+          </button>
+        </td>
+      </ng-container>    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+    <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+  </table>
+</div>

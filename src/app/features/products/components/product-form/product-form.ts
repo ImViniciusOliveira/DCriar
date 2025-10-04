@@ -6,6 +6,10 @@ import { Component } from '@angular/core';
   templateUrl: './product-form.html',
   styleUrl: './product-form.scss'
 })
-export class ProductForm {
+export class ProductFormComponent {
+
+}
+
+export interface ProductFormData {
 
 }

@@ -1,1 +1,15 @@
-<p>top-navbar works!</p>
+<mat-toolbar>
+  <span>DCriar</span>
+
+  <span class="spacer"></span>
+
+  @if (apiRoot.endpoints(); as endpoints) {
+    @for (link of objectKeys(endpoints._links); track link) {
+      @if (!endpoints._links[link].templated) {
+        <a mat-button [routerLink]="link" class="nav-link">
+          <span>{{ link }}</span>
+        </a>
+      }
+    }
+  }
+</mat-toolbar>

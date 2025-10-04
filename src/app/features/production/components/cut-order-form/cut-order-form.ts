@@ -4,8 +4,7 @@ import { Component } from '@angular/core';
   selector: 'app-cut-order-form',
   imports: [],
   templateUrl: './cut-order-form.html',
-  styleUrl: './cut-order-form.scss'
+  styleUrl: './cut-order-form.scss',
+  standalone: true,
 })
-export class CutOrderForm {
-
-}
+export class CutOrderForm {}

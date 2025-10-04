@@ -4,8 +4,7 @@ import { Component } from '@angular/core';
   selector: 'app-sales-list',
   imports: [],
   templateUrl: './sales-list.html',
-  styleUrl: './sales-list.scss'
+  styleUrl: './sales-list.scss',
+  standalone: true,
 })
-export class SalesList {
-
-}
+export class SalesList {}

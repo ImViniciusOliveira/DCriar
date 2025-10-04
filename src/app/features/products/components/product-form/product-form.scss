@@ -1,0 +1,24 @@
+.product-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-row, .dimensions-group {
+  display: flex;
+  gap: 16px;
+
+  mat-form-field {
+    flex: 1;
+  }
+}
+
+.dimensions-title {
+    margin-top: 16px;
+    margin-bottom: 8px;
+    color: rgba(0,0,0,.6);
+}
+
+.mat-mdc-dialog-actions {
+    justify-content: flex-end;
+}
