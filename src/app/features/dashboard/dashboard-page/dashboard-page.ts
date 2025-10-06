@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { ApiRoot } from '../../../core/services/api-root';
 
 @Component({
@@ -9,11 +9,7 @@ import { ApiRoot } from '../../../core/services/api-root';
   styleUrl: './dashboard-page.scss',
   standalone: true,
 })
-export class DashboardPage implements OnInit {
+export class DashboardPage {
   apiRoot = inject(ApiRoot);
   objectKeys = Object.keys;
-
-  ngOnInit(): void {
-    this.apiRoot.loadEndpoints().subscribe();
-  }
 }

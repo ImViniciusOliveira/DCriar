@@ -1,8 +1,14 @@
-import { Hateoas, Link } from '../../../core/models/hateoas.model';
+import { Hateoas } from '../../../core/models/hateoas.model';
+import { MaterialType } from '../../stock/models/material-type.model';
 
 export interface Dimensions {
   largura: number;
   comprimento: number;
+}
+
+export interface DimensionsUnitarias {
+  larguraCm: number;
+  comprimentoCm: number;
 }
 
 export interface Product extends Hateoas {
@@ -16,7 +22,11 @@ export interface Product extends Hateoas {
   estoqueFisicoTotal: number;
   estoqueDistribuidoTotal: number;
   estoqueDisponivelParaAlocar: number;
-  dimensoes: Dimensions;
+  estoquePorCanal: { [key: string]: number };
+  dimensoes?: Dimensions;
+  fotoPrincipalUrl: string;
+  tipoMateriaPrima?: MaterialType;
+  dimensoesUnitarias: DimensionsUnitarias;
 }
 
 export interface EmbeddedProducts {
@@ -25,4 +35,12 @@ export interface EmbeddedProducts {
 
 export interface ApiResponseProducts extends Hateoas {
   _embedded: EmbeddedProducts;
+  page?: PageInfo;
+}
+
+export interface PageInfo {
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  number: number;
 }

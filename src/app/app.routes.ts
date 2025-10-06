@@ -36,4 +36,8 @@ export const routes: Routes = [
     path: 'tipos-materia-prima',
     component: MaterialTypeList,
   },
+  {
+    path: '**',
+    redirectTo: 'dashboard',
+  },
 ];

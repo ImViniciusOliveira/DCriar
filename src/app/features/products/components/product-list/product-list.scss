@@ -1,28 +1,45 @@
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 2rem;
+.page-card {
+  margin: 24px;
+}
 
-  h1 {
-    margin: 0;
-    span {
-      font-size: 1rem;
-      color: #6c757d; // var(--text-muted-color)
-      font-weight: 400;
-    }
-  }
+.page-card mat-card-header {
+  display: flex;
+  align-items: center;
+}
+
+.header-spacer {
+  flex: 1 1 auto;
+}
+
+.table-wrapper {
+  position: relative;
+}
+
+.spinner-container {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.7);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .table-container {
-  background-color: white;
-  border: 1px solid #dee2e6; // var(--border-color)
+  position: relative;
   border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  overflow-x: auto; // Permite rolagem horizontal se necessário
+  max-height: 70vh; // Define uma altura máxima para a tabela
 }
 
 .stock-info small {
   color: #6c757d; // var(--text-muted-color)
+  font-size: 0.85rem;
+}
+
+.channel-stock-list {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
   font-size: 0.85rem;
 }

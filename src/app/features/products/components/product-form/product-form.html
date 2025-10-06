@@ -1,1 +1,141 @@
-<p>product-form works!</p>
+<h2 mat-dialog-title>{{ data.isCreationMode ? 'Cadastrar Produto' : (isEditMode ? 'Editar Produto' : 'Detalhes do Produto') }}</h2>
+@if (isEditMode || data.isCreationMode) {
+  <form [formGroup]="productForm" (ngSubmit)="onSubmit()">
+    <mat-dialog-content>
+        <div class="form-row">
+          <mat-form-field class="full-width">
+            <mat-label>Nome</mat-label>
+            <input matInput formControlName="nome" required>
+          </mat-form-field>
+        </div>
+        <div class="form-row">
+          <mat-form-field>
+            <mat-label>SKU</mat-label>
+            <input matInput formControlName="sku" required>
+          </mat-form-field>
+          <mat-form-field>
+            <mat-label>Cor</mat-label>
+            <input matInput formControlName="cor">
+          </mat-form-field>
+        </div>
+        <mat-form-field class="full-width">
+      <mat-label>Descrição</mat-label>
+          <textarea matInput formControlName="descricao"></textarea>
+        </mat-form-field>
+        <div class="form-row">
+          <mat-form-field>
+            <mat-label>Unidades por Produto</mat-label>
+            <input matInput type="number" formControlName="unidadesPorProduto" required>
+          </mat-form-field>
+        </div>
+
+        <div class="image-upload-section">
+          <label class="mat-body-2" for="fotoPrincipal">Foto Principal</label>
+          <div class="image-preview">
+            @if (product.fotoPrincipalUrl) {
+              <img [src]="product.fotoPrincipalUrl" alt="Foto do produto {{product.nome}}">
+            }
+          </div>
+          <div class="image-upload">
+            <input id="fotoPrincipal" type="file" (change)="onFileSelected($event)" accept="image/png, image/jpeg" #fileInput>
+            <button mat-stroked-button type="button" (click)="fileInput.click()">
+              <mat-icon>attach_file</mat-icon>
+              Selecionar Arquivo
+            </button>
+            <button mat-flat-button color="primary" type="button" (click)="onUpload()" [disabled]="!selectedFile">
+              <mat-icon>upload</mat-icon>
+              Enviar Imagem
+            </button>
+          </div>
+        </div>
+
+        <mat-checkbox formControlName="ativo" class="form-checkbox">Ativo</mat-checkbox>
+
+        <fieldset class="material-type-search">
+          <legend>Matéria-Prima</legend>
+          <div class="search-filters">
+            <mat-form-field>
+              <mat-label>Buscar por nome</mat-label>
+              <input matInput [(ngModel)]="searchName" name="searchName" (keyup.enter)="performSearch()" [ngModelOptions]="{standalone: true}">
+            </mat-form-field>
+            <mat-form-field>
+              <mat-label>Filtrar por Unidade</mat-label>
+              <mat-select [(ngModel)]="searchUnit" name="searchUnit" [ngModelOptions]="{standalone: true}">
+                <mat-option value="">Todos</mat-option>
+            @for (unit of consumptionUnits; track unit.value) {
+              <mat-option [value]="unit.value">{{ unit.viewValue }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+            <button mat-icon-button color="primary" type="button" (click)="performSearch()" [disabled]="isSearching" title="Buscar Matéria-Prima">
+              <mat-icon>search</mat-icon>
+            </button>
+          </div>
+          <mat-form-field class="full-width" formGroupName="tipoMateriaPrima">
+            <mat-label>Tipo de Matéria Prima</mat-label>
+            <mat-select formControlName="id" required>
+              @for (materialType of materialTypes(); track materialType.id) {
+                <mat-option [value]="materialType.id">{{ materialType.nome }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+        </fieldset>
+
+        <h3 class="dimensions-title mat-subheading-2">Dimensões Unitárias</h3>
+        <div class="dimensions-group" formGroupName="dimensoesUnitarias">
+          <mat-form-field>
+            <mat-label>Largura (cm)</mat-label>
+            <input matInput type="number" formControlName="larguraCm" required>
+          </mat-form-field>
+          <mat-form-field>
+            <mat-label>Comprimento (cm)</mat-label>
+            <input matInput type="number" formControlName="comprimentoCm" required>
+          </mat-form-field>
+        </div>
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+        <button mat-button mat-dialog-close>Cancelar</button>
+      <button mat-raised-button color="primary" type="submit" [disabled]="productForm.invalid">{{ data.isCreationMode ? 'Cadastrar' : 'Salvar Alterações' }}</button>
+    </mat-dialog-actions>
+  </form>
+} @else {
+  <mat-dialog-content class="details-content">
+    <div class="details-container">
+      <div class="details-image">
+        @if (product.fotoPrincipalUrl) {
+          <img [src]="product.fotoPrincipalUrl" alt="Foto do produto {{product.nome}}">
+        } @else {
+          <div class="no-image">
+            <mat-icon>image_not_supported</mat-icon>
+            <span>Sem imagem</span>
+          </div>
+        }
+      </div>
+      <div class="details-info">
+        <p><strong>SKU:</strong> {{ product.sku }}</p>
+        <p><strong>Cor:</strong> {{ product.cor }}</p>
+        <p><strong>Dimensões:</strong> {{ product.dimensoes?.largura }} x {{ product.dimensoes?.comprimento }} cm</p>
+        <p><strong>Ativo:</strong> {{ product.ativo ? 'Sim' : 'Não' }}</p>
+        <hr>
+        <p><strong>Estoque Físico Total:</strong> {{ product.estoqueFisicoTotal }} pacotes</p>
+        <p><strong>Estoque Distribuído:</strong> {{ product.estoqueDistribuidoTotal }} pacotes</p>
+        <p><strong>Disponível para Alocar:</strong> {{ product.estoqueDisponivelParaAlocar }} pacotes</p>
+        <p><strong>Unidades por Pacote:</strong> {{ product.unidadesPorProduto }}</p>
+        <hr>
+        @if (product.tipoMateriaPrima) {
+          <p><strong>Matéria-Prima:</strong> {{ product.tipoMateriaPrima.nome }}</p>
+          <p><strong>Unidade de Consumo:</strong> {{ getConsumptionUnitViewValue(product.tipoMateriaPrima.unidadeDeConsumo) }}</p>
+        }
+      </div>
+    </div>
+    @if (product.descricao) {
+      <div class="details-description">
+        <h4>Descrição</h4>
+        <p>{{ product.descricao }}</p>
+      </div>
+    }
+  </mat-dialog-content>
+  <mat-dialog-actions align="end">
+    <button mat-button mat-dialog-close>Fechar</button>
+  </mat-dialog-actions>
+}

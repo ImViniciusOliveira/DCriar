@@ -1,0 +1,15 @@
+<h2>Detalhes do Produto</h2>
+<div class="product-details">
+  <p><strong>ID:</strong> {{ product.id }}</p>
+  <p><strong>Nome:</strong> {{ product.nome }}</p>
+  <p><strong>SKU:</strong> {{ product.sku }}</p>
+  <p><strong>Descrição:</strong> {{ product.descricao }}</p>
+  <p><strong>Cor:</strong> {{ product.cor }}</p>
+  <p><strong>Dimensões:</strong> {{ product.dimensoes?.largura }} x {{ product.dimensoes?.comprimento }} cm</p>
+  <p><strong>Estoque Físico Total:</strong> {{ product.estoqueFisicoTotal }} pacotes</p>
+  <p><strong>Estoque Distribuído Total:</strong> {{ product.estoqueDistribuidoTotal }} pacotes</p>
+  <p><strong>Estoque Disponível para Alocar:</strong> {{ product.estoqueDisponivelParaAlocar }} pacotes</p>
+  <p><strong>Unidades por Produto:</strong> {{ product.unidadesPorProduto }} unidades</p>
+  <p><strong>Ativo:</strong> {{ product.ativo ? 'Sim' : 'Não' }}</p>
+</div>
+<button mat-button (click)="close()">Fechar</button>

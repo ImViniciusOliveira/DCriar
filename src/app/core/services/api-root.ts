@@ -7,11 +7,15 @@ import { Observable, tap } from 'rxjs';
   providedIn: 'root',
 })
 export class ApiRoot {
-  private http = inject(HttpClient);
+  private readonly http = inject(HttpClient);
 
   private readonly API_URL = '/api/v1';
 
   endpoints = signal<Hateoas | undefined>(undefined);
+
+  constructor() {
+    this.loadEndpoints().subscribe();
+  }
 
   loadEndpoints(): Observable<Hateoas> {
     return this.http
