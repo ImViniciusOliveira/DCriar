@@ -13,7 +13,7 @@ import {
   ConfirmDialog,
   ConfirmDialogData,
 } from '../../../../shared/components/confirm-dialog/confirm-dialog/confirm-dialog';
-import { forkJoin, map, filter, catchError, of, switchMap, EMPTY, tap, finalize } from 'rxjs';
+import { filter, catchError, of, lastValueFrom } from 'rxjs';
 import { ProductFormComponent, ProductFormData } from '../product-form/product-form';
 import { StockService } from '../../../stock/services/stock.service';
 import { MatCardModule } from '@angular/material/card';
@@ -63,36 +63,34 @@ export class ProductList implements OnInit {
     this.loadProducts();
   }
 
-  loadProducts(): void {
+  async loadProducts(): Promise<void> {
     this.isLoading.set(true);
-    forkJoin({
-      productsResponse: this.productsService.getProducts(
-        this.pageIndex(),
-        this.pageSize()
-      ),
-      channelStockMap: this.stockService.getChannelStockMap().pipe(
-        catchError(error => {
-          console.error('Erro ao buscar estoque por canal. A tabela será exibida sem esses dados.', error);
-          return of(new Map<number, { [key: string]: number }>()); // Retorna um mapa vazio em caso de erro
-        })
-      )
-    }).pipe(
-      tap(({ productsResponse }) => {
-        // Ajuste aqui para usar a propriedade correta do ApiResponseProducts
-        this.totalElements.set(productsResponse.page?.totalElements || 0);
-      }),
-      map(({ productsResponse, channelStockMap }) => {
-        const products = productsResponse._embedded?.produtos || [];
-        // Adiciona as informações de estoque por canal a cada produto
-        return products.map(product => ({
-          ...product,
-          estoquePorCanal: channelStockMap.get(product.id) || {}
-        }));
-      }),
-      finalize(() => this.isLoading.set(false))
-    ).subscribe(mergedProducts => {
+    try {
+      const [productsResponse, channelStockMap] = await Promise.all([
+        lastValueFrom(this.productsService.getProducts(this.pageIndex(), this.pageSize())),
+        lastValueFrom(this.stockService.getChannelStockMap().pipe(
+          catchError(error => {
+            console.error('Erro ao buscar estoque por canal. A tabela será exibida sem esses dados.', error);
+            return of(new Map<number, { [key: string]: number }>()); // Retorna um mapa vazio em caso de erro
+          })
+        ))
+      ]);
+
+      this.totalElements.set(productsResponse.page?.totalElements || 0);
+
+      const products = productsResponse._embedded?.produtos || [];
+      const mergedProducts = products.map(product => ({
+        ...product,
+        estoquePorCanal: channelStockMap.get(product.id) || {}
+      }));
+
       this.products.set(mergedProducts);
-    });
+    } catch (error) {
+      console.error('Erro ao carregar produtos:', error);
+      this.snackBar.open('Falha ao carregar produtos.', 'Fechar', { duration: 3000 });
+    } finally {
+      this.isLoading.set(false);
+    }
   }
 
   onPageChange(event: PageEvent): void {
@@ -101,31 +99,29 @@ export class ProductList implements OnInit {
     this.loadProducts();
   }
 
-  onDelete(product: Product): void {
+  async onDelete(product: Product): Promise<void> {
     const dialogData: ConfirmDialogData = {
       title: 'Confirmar Exclusão',
       message: `Tem certeza que deseja excluir o produto "${product.nome}"?`,
     };
 
     const dialogRef = this.dialog.open(ConfirmDialog, { data: dialogData });
+    const confirmed = await lastValueFrom(dialogRef.afterClosed());
 
-    dialogRef
-      .afterClosed()
-      .pipe(filter(result => result === true))
-      .pipe(
-        switchMap(() => {
+    if (confirmed) {
+      try {
         const deleteUrl = product._links['deletar-produto']?.href;
-          return deleteUrl ? this.productsService.deleteProduct(deleteUrl) : EMPTY;
-        })
-      )
-      .subscribe(() => {
-        // A exclusão e o `refresh$` no serviço foram concluídos.
-        // Agora, recarregamos os dados combinados na lista.
-        this.loadProducts();
-        this.snackBar.open('Produto excluído com sucesso!', 'Fechar', {
-          duration: 3000,
-        });
-      });
+        if (!deleteUrl) {
+          throw new Error('URL de exclusão não encontrada.');
+        }
+        await lastValueFrom(this.productsService.deleteProduct(deleteUrl));
+        this.snackBar.open('Produto excluído com sucesso!', 'Fechar', { duration: 3000 });
+        await this.loadProducts(); // Recarrega a lista
+      } catch (error) {
+        console.error('Erro ao excluir produto:', error);
+        this.snackBar.open('Falha ao excluir o produto.', 'Fechar', { duration: 3000 });
+      }
+    }
   }
 
   onView(product: Product): void {

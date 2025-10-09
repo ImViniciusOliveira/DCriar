@@ -22,14 +22,35 @@
 
 }
 
-.image-preview {
+.image-preview-container {
+  position: relative;
   margin-top: 8px;
   margin-bottom: 16px;
+  min-height: 100px; // Garante uma altura mínima mesmo sem imagem
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f0f0f0;
+  border-radius: 4px;
+
   img {
     max-width: 200px;
     max-height: 200px;
     border: 1px solid #ccc;
     border-radius: 4px;
+  }
+
+  .upload-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 }
 

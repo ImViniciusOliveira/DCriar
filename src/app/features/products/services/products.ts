@@ -103,11 +103,11 @@ export class ProductsService {
    * Etapa 2: Atualiza a URL da foto do produto.
    */
   updateProductPhotoUrl(productUpdateUrl: string, product: Product, imageUrl: string): Observable<Product> {
+    // Envia apenas os campos necessários para a atualização, evitando o envio de objetos complexos.
     const payload = {
-      ...product, // Inclui todos os dados existentes do produto
-      fotoPrincipalUrl: imageUrl, // Sobrescreve com a nova URL da imagem
-      // O backend espera o tipoMateriaPrimaId para validação
-      tipoMateriaPrimaId: product.tipoMateriaPrima?.id,
+      ...product, // Envia o objeto completo do produto
+      fotoPrincipalUrl: imageUrl, // Sobrescreve a URL da imagem
+      tipoMateriaPrimaId: product.tipoMateriaPrima?.id, // Garante que o ID da matéria-prima seja enviado
     };
     return this.patchProduct(productUpdateUrl, payload);
   }

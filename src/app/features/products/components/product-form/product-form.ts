@@ -1,7 +1,7 @@
-import { InfiniteScrollDirective } from './../../../stock/services/infinite-scroll.directive';
+import { InfiniteScrollDirective } from '../../../../shared/directives/infinite-scroll.directive';
 import { CommonModule } from '@angular/common';
 import { ChangeDetectorRef, Component, Inject, OnInit, WritableSignal, inject, signal } from '@angular/core';
-import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { Product } from '../../models/products.model';
 import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ProductsService } from '../../services/products';
@@ -13,6 +13,8 @@ import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatIconModule } from '@angular/material/icon';
+import { ConfirmDialog, ConfirmDialogData } from '../../../../shared/components/confirm-dialog/confirm-dialog/confirm-dialog';
+import { lastValueFrom } from 'rxjs';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
 @Component({
@@ -30,6 +32,7 @@ export class ProductFormComponent implements OnInit {
   private readonly productsService = inject(ProductsService);
   private readonly materialTypeService = inject(MaterialTypeService);
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly dialog = inject(MatDialog);
 
   materialTypes: WritableSignal<MaterialType[]> = signal([]);
 
@@ -38,6 +41,7 @@ export class ProductFormComponent implements OnInit {
   searchUnit: string = '';
   selectedFile: File | null = null;
   isSearching = signal(false);
+  isUploading = signal(false);
 
   // Estado da Paginação
   private readonly currentPage = signal(0);
@@ -65,9 +69,6 @@ export class ProductFormComponent implements OnInit {
     if (searchUrl) {
       // Armazena apenas a URL base, removendo o template HATEOAS.
       this.materialTypesSearchUrl = searchUrl.split('{')[0];
-      console.log('[DEBUG] URL de busca de matéria-prima definida:', this.materialTypesSearchUrl);
-    } else {
-      console.warn('[DEBUG] Link "buscar-tipos-materia-prima" não encontrado no produto recebido.');
     }
 
     this.productForm = this.fb.group({
@@ -77,9 +78,7 @@ export class ProductFormComponent implements OnInit {
       cor: [this.product.cor],
       unidadesPorProduto: [this.product.unidadesPorProduto, [Validators.required, Validators.min(1)]],
       ativo: [this.product.ativo],
-      tipoMateriaPrima: this.fb.group({
-        id: [this.product.tipoMateriaPrima?.id, Validators.required]
-      }),
+      tipoMateriaPrima: [this.product.tipoMateriaPrima, Validators.required],
       dimensoesUnitarias: this.fb.group({
         larguraCm: [this.product.dimensoesUnitarias?.larguraCm, [Validators.required, Validators.min(0.1)]],
         comprimentoCm: [this.product.dimensoesUnitarias?.comprimentoCm, [Validators.required, Validators.min(0.1)]]
@@ -87,38 +86,33 @@ export class ProductFormComponent implements OnInit {
     });
   }
 
-  onSubmit(): void {
+  async onSubmit(): Promise<void> {
     if (this.productForm.invalid) {
       return; // Impede o envio se o formulário for inválido
     }
 
-    const formValue = this.productForm.value;
-    const payload = {
-      ...formValue,
-      tipoMateriaPrimaId: formValue.tipoMateriaPrima.id,
-    };
-    // Remove o form group aninhado para não ser enviado no payload
-    delete payload.tipoMateriaPrima;
+    try {
+      const formValue = this.productForm.value;
+      const payload = {
+        ...formValue,
+        tipoMateriaPrimaId: formValue.tipoMateriaPrima?.id,
+      };
+      delete payload.tipoMateriaPrima;
 
-    if (this.isEditMode) {
-      const updateUrl = this.product._links['atualizar-produto']?.href;
-      if (updateUrl) {
-        this.productsService.patchProduct(updateUrl, payload).subscribe({
-          next: () => {
-            this.dialogRef.close(true); // Fecha o diálogo e sinaliza sucesso
-          },
-          error: error => console.error('Erro ao atualizar o produto:', error)
-        });
-      } else {
-        console.error('URL de atualização não encontrada para o produto.');
+      if (this.isEditMode) {
+        const updateUrl = this.product._links['atualizar-produto']?.href;
+        if (!updateUrl) {
+          console.error('URL de atualização não encontrada para o produto.');
+          return;
+        }
+        await lastValueFrom(this.productsService.patchProduct(updateUrl, payload));
+      } else { // Modo de Criação
+        await lastValueFrom(this.productsService.createProduct(payload));
       }
-    } else { // Modo de Criação
-      this.productsService.createProduct(payload).subscribe({
-        next: () => {
-          this.dialogRef.close(true);
-        },
-        error: error => console.error('Erro ao criar o produto:', error)
-      });
+
+      this.dialogRef.close(true); // Fecha o diálogo e sinaliza sucesso
+    } catch (error) {
+      console.error(this.isEditMode ? 'Erro ao atualizar o produto:' : 'Erro ao criar o produto:', error);
     }
   }
 
@@ -144,77 +138,73 @@ export class ProductFormComponent implements OnInit {
     }
   }
 
-  performSearch(): void {
-    console.log('[DEBUG] performSearch: Iniciando busca...');
+  async performSearch(): Promise<void> {
     this.isSearching.set(true);
-    this.currentPage.set(0); // Reseta a página
-    this.materialTypes.set([]); // Limpa a lista antiga
 
-    if (!this.materialTypesSearchUrl) {
-      console.error("Não é possível buscar matérias-primas: URL não encontrada no produto.");
-      this.isSearching.set(false);
-      return;
-    }
+    try {
+      this.currentPage.set(0); // Reseta a página
 
-    const filters = { nome: this.searchName, unidadeDeConsumo: this.searchUnit };
-    console.log('[DEBUG] performSearch: Chamando serviço com URL e filtros:', { url: this.materialTypesSearchUrl, filters });
+      // No modo de edição, mantém a matéria-prima atual na lista para não perdê-la de vista.
+      const initialMaterialTypes = (this.isEditMode && this.product.tipoMateriaPrima)
+        ? [this.product.tipoMateriaPrima]
+        : [];
+      this.materialTypes.set(initialMaterialTypes);
 
-    this.materialTypeService.searchMaterialTypes(
-      this.materialTypesSearchUrl,
-      filters,
-      this.currentPage(),
-      this.pageSize
-    ).subscribe({
-      next: response => {
-        console.log('[DEBUG] performSearch: Resposta recebida:', response);
-        this.materialTypes.set(response._embedded['tipos-materia-prima']);
-        this.totalElements.set(response.page.totalElements);
-        this.isSearching.set(false);
-      },
-      error: err => {
-        console.error('[DEBUG] performSearch: Erro na busca:', err);
-        this.isSearching.set(false);
+      if (!this.materialTypesSearchUrl) {
+        console.error("Não é possível buscar matérias-primas: URL não encontrada no produto.");
+        return;
       }
-    });
+
+      const filters = { nome: this.searchName, unidadeDeConsumo: this.searchUnit };
+
+      const response = await lastValueFrom(
+        this.materialTypeService.searchMaterialTypes(
+          this.materialTypesSearchUrl,
+          filters,
+          this.currentPage(),
+          this.pageSize
+        )
+      );
+
+      const newMaterials = response._embedded['tipos-materia-prima'];
+
+      // Adiciona os novos resultados, garantindo que o item inicial (se houver) não seja duplicado.
+      this.materialTypes.update(currentTypes => {
+        const currentIds = new Set(currentTypes.map(t => t.id));
+        const filteredNew = newMaterials.filter(t => !currentIds.has(t.id));
+        return [...currentTypes, ...filteredNew];
+      });
+      this.totalElements.set(response.page.totalElements);
+    } catch (err) {
+      console.error('Erro na busca por matéria-prima:', err);
+    } finally {
+      this.isSearching.set(false);
+    }
   }
 
-  loadMore(): void {
+  async loadMore(): Promise<void> {
     // Só carrega mais se não estiver buscando e se houver mais itens para carregar
     if (this.isSearching() || this.materialTypes().length >= this.totalElements()) {
       return;
     }
 
-    console.log('[DEBUG] loadMore: Carregando próxima página...');
     this.isSearching.set(true);
-    this.currentPage.update(page => page + 1);
 
-    if (!this.materialTypesSearchUrl) {
+    try {
+      this.currentPage.update(page => page + 1);
+
+      if (!this.materialTypesSearchUrl) return;
+
+      const filters = { nome: this.searchName, unidadeDeConsumo: this.searchUnit };
+
+      const response = await lastValueFrom(this.materialTypeService.searchMaterialTypes(this.materialTypesSearchUrl, filters, this.currentPage(), this.pageSize));
+
+      this.materialTypes.update(currentTypes => [...currentTypes, ...response._embedded['tipos-materia-prima']]);
+    } catch (err) {
+      console.error('Erro ao carregar mais matérias-primas:', err);
+    } finally {
       this.isSearching.set(false);
-      return;
     }
-
-    const filters = { nome: this.searchName, unidadeDeConsumo: this.searchUnit };
-    console.log('[DEBUG] loadMore: Chamando serviço com URL e filtros:', { url: this.materialTypesSearchUrl, filters, page: this.currentPage() });
-
-    this.materialTypeService.searchMaterialTypes(
-      this.materialTypesSearchUrl,
-      filters,
-      this.currentPage(),
-      this.pageSize
-    ).subscribe({
-      next: response => {
-        console.log('[DEBUG] loadMore: Resposta recebida:', response);
-        this.materialTypes.update(currentTypes => ([
-          ...currentTypes,
-          ...response._embedded['tipos-materia-prima']
-        ]));
-        this.isSearching.set(false);
-      },
-      error: err => {
-        console.error('[DEBUG] loadMore: Erro ao carregar mais:', err);
-        this.isSearching.set(false);
-      }
-    });
   }
 
   onFileSelected(event: Event): void {
@@ -224,31 +214,62 @@ export class ProductFormComponent implements OnInit {
     }
   }
 
-  onUpload(): void {
+  async onUpload(): Promise<void> {
     if (this.selectedFile && this.product.id) {
-      // ETAPA 1: Fazer o upload da imagem para o endpoint genérico
-      this.productsService.uploadImage(this.selectedFile).subscribe({
-        next: (uploadResponse) => {
-          const imageUrl = uploadResponse.fileDownloadUri;
-          const updateUrl = this.product._links['atualizar-produto']?.href;
+      this.isUploading.set(true);
+      try {
+        // ETAPA 1: Fazer o upload da imagem
+        const uploadResponse = await lastValueFrom(this.productsService.uploadImage(this.selectedFile));
+        const imageUrl = uploadResponse.fileDownloadUri;
+        const updateUrl = this.product._links['atualizar-produto']?.href;
 
-          if (updateUrl) {
-            // Etapa 2: Atualizar o produto com a URL da imagem recebida
-            this.productsService.updateProductPhotoUrl(updateUrl, this.product, imageUrl).subscribe(updatedProduct => {
-              this.product.fotoPrincipalUrl = updatedProduct.fotoPrincipalUrl; // Atualiza a interface do usuário
-              this.selectedFile = null; // Limpa a seleção do arquivo
-              this.cdr.detectChanges(); // Notifica o Angular para atualizar a view
-            });
-          }
-        },
-        error: (err) => console.error('Falha no upload da imagem:', err),
-      });
+        if (!updateUrl) {
+          console.error('URL de atualização não encontrada para o produto.');
+          return;
+        }
+        // Etapa 2: Atualizar o produto com a URL da imagem
+        const updatedProduct = await lastValueFrom(this.productsService.updateProductPhotoUrl(updateUrl, this.product, imageUrl));
+        this.product.fotoPrincipalUrl = updatedProduct.fotoPrincipalUrl; // Atualiza a interface
+        this.selectedFile = null; // Limpa a seleção do arquivo
+        this.cdr.detectChanges(); // Notifica o Angular para atualizar a view
+      } catch (err) {
+        console.error('Falha no upload da imagem:', err);
+      } finally {
+        this.isUploading.set(false);
+      }
     }
   }
 
   getConsumptionUnitViewValue(value: string): string {
     const unit = this.consumptionUnits.find(u => u.value === value);
     return unit ? unit.viewValue : value;
+  }
+
+  compareMaterialTypes(o1: MaterialType, o2: MaterialType): boolean {
+    return o1 && o2 ? o1.id === o2.id : o1 === o2;
+  }
+
+  async onMaterialTypeChange(event: { value: MaterialType }): Promise<void> {
+    const newSelection = event.value;
+    const originalSelection = this.product.tipoMateriaPrima;
+
+    // Se a seleção não mudou ou se não havia uma seleção original, não faz nada.
+    if (!originalSelection || !newSelection || originalSelection.id === newSelection.id) {
+      return;
+    }
+
+    const dialogData: ConfirmDialogData = {
+      title: 'Confirmar Alteração',
+      message: `Deseja realmente alterar a matéria-prima de "${originalSelection.nome}" para "${newSelection.nome}"?`
+    };
+
+    const dialogRef = this.dialog.open(ConfirmDialog, { data: dialogData });
+    const confirmed = await lastValueFrom(dialogRef.afterClosed());
+
+    if (!confirmed) {
+      // Se o usuário cancelar, reverte a seleção para o valor original.
+      this.productForm.get('tipoMateriaPrima')?.setValue(originalSelection);
+    }
   }
 }
 
