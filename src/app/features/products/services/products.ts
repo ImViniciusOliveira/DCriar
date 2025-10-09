@@ -54,15 +54,13 @@ export class ProductsService {
   }
 
   deleteProduct(url: string): Observable<void> {
-    const relativeUrl = this.toRelativeUrl(url);
-    return this.http.delete<void>(relativeUrl).pipe(
+    return this.http.delete<void>(url).pipe(
       tap(() => this.refresh$.next()) // Dispara o recarregamento da lista de produtos.
     );
   }
 
   updateProduct(url: string, product: Product): Observable<Product> {
-    const relativeUrl = this.toRelativeUrl(url);
-    return this.http.put<Product>(relativeUrl, product);
+    return this.http.put<Product>(url, product);
   }
 
   createProduct(product: Partial<Product>): Observable<Product> {
@@ -74,15 +72,13 @@ export class ProductsService {
     if (!url) {
       throw new Error('URL de produtos não encontrada na resposta da API');
     }
-    const relativeUrl = this.toRelativeUrl(url);
-    return this.http.post<Product>(relativeUrl, product).pipe(
+    return this.http.post<Product>(url, product).pipe(
       tap(() => this.refresh$.next()) // Dispara o recarregamento da lista de produtos.
     );
   }
 
   patchProduct(url: string, product: Partial<Product>): Observable<Product> {
-    const relativeUrl = this.toRelativeUrl(url);
-    return this.http.patch<Product>(relativeUrl, product).pipe(
+    return this.http.patch<Product>(url, product).pipe(
       tap(() => this.refresh$.next()) // Dispara o recarregamento da lista de produtos.
     );
   }
@@ -94,7 +90,13 @@ export class ProductsService {
   uploadImage(file: File): Observable<{ fileDownloadUri: string }> {
     const formData = new FormData();
     formData.append('file', file);
-    return this.http.post<{ fileDownloadUri: string }>('/api/v1/uploads', formData);
+    // Utiliza a URL de upload do HATEOAS, se disponível, ou um fallback.
+    return this.endpoints$.pipe(
+      switchMap(endpoints => {
+        const uploadUrl = endpoints._links['upload']?.href || '/api/v1/uploads';
+        return this.http.post<{ fileDownloadUri: string }>(uploadUrl, formData);
+      })
+    );
   }
 
   /**
@@ -115,18 +117,7 @@ export class ProductsService {
     if (!url) {
       throw new Error('URL de produtos não encontrada na resposta da API');
     }
-    // Remove a parte do template para obter a URL base
-    return this.toRelativeUrl(url.split('{')[0]);
-  }
-
-  private toRelativeUrl(absoluteUrl: string): string {
-    try {
-      const url = new URL(absoluteUrl);
-      return url.pathname + url.search + url.hash;
-    } catch (e) {
-      // Se já for uma URL relativa ou inválida, retorne como está.
-      console.error('Erro ao converter URL para relativa:', e, absoluteUrl);
-      return absoluteUrl;
-    }
+    // Retorna a URL base, removendo os templates HATEOAS
+    return url.split('{')[0];
   }
 }

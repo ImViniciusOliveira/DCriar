@@ -52,7 +52,7 @@ export class ProductList implements OnInit {
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
 
-  private readonly channelNameMap = new Map<string, string>([
+  private static readonly channelNameMap = new Map<string, string>([
     ['LOJA_FISICA', 'Loja Física'],
     ['SHOPEE', 'Shopee'],
     ['SITE_PROPRIO', 'Site Próprio'],
@@ -178,6 +178,6 @@ export class ProductList implements OnInit {
   }
 
   getChannelDisplayName(channelKey: string): string {
-    return this.channelNameMap.get(channelKey) || channelKey;
+    return ProductList.channelNameMap.get(channelKey) || channelKey;
   }
 }

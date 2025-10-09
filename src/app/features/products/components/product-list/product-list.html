@@ -51,7 +51,7 @@
           <ng-container matColumnDef="estoquePorCanal">
             <th mat-header-cell *matHeaderCellDef> Estoque por Canal </th>
             <td mat-cell *matCellDef="let product">
-              @if (product.estoquePorCanal) {
+              @if (product.estoquePorCanal && (product.estoquePorCanal | keyvalue).length > 0) {
                 <ul class="channel-stock-list">
                   @for (channel of product.estoquePorCanal | keyvalue; track channel.key) {
                     <li>{{ getChannelDisplayName($any(channel.key)) }}: {{ channel.value }}</li>

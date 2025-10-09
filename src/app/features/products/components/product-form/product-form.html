@@ -67,15 +67,22 @@
                 }
               </mat-select>
             </mat-form-field>
-            <button mat-icon-button color="primary" type="button" (click)="performSearch()" [disabled]="isSearching" title="Buscar Matéria-Prima">
+            <button mat-icon-button color="primary" type="button" (click)="performSearch()" [disabled]="isSearching()" title="Buscar Matéria-Prima">
               <mat-icon>search</mat-icon>
             </button>
           </div>
           <mat-form-field class="full-width" formGroupName="tipoMateriaPrima">
             <mat-label>Tipo de Matéria Prima</mat-label>
-            <mat-select formControlName="id" required>
+            <mat-select formControlName="id" required appInfiniteScroll (infiniteScroll)="loadMore()">
               @for (materialType of materialTypes(); track materialType.id) {
                 <mat-option [value]="materialType.id">{{ materialType.nome }}</mat-option>
+              }
+              @if (isSearching()) {
+                <mat-option disabled>
+                  <div class="spinner-container">
+                    <mat-spinner diameter="20"></mat-spinner>
+                  </div>
+                </mat-option>
               }
             </mat-select>
           </mat-form-field>

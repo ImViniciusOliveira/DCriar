@@ -1,4 +1,5 @@
 import { Hateoas } from '../../../core/models/hateoas.model';
+import { PageInfo } from '../../products/models/products.model';
 
 export interface MaterialType extends Hateoas {
   id: number;
@@ -6,10 +7,14 @@ export interface MaterialType extends Hateoas {
   unidadeDeConsumo: string;
 }
 
-export interface EmbeddedMaterialTypes {
-  'tipos-materia-prima': MaterialType[];
+export interface ApiResponseMaterialTypes extends Hateoas {
+  _embedded?: { 'tipos-materia-prima': MaterialType[] };
 }
 
-export interface ApiResponseMaterialTypes extends Hateoas {
-  _embedded: EmbeddedMaterialTypes;
+export interface PagedMaterialTypesResponse {
+  _embedded: {
+    'tipos-materia-prima': MaterialType[];
+  };
+  page: PageInfo;
+  _links: Hateoas['_links'];
 }

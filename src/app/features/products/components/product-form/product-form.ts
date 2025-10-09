@@ -1,6 +1,7 @@
+import { InfiniteScrollDirective } from './../../../stock/services/infinite-scroll.directive';
 import { CommonModule } from '@angular/common';
-import { ChangeDetectorRef, Component, Inject, OnInit, inject, signal } from '@angular/core';
-import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef, } from '@angular/material/dialog';
+import { ChangeDetectorRef, Component, Inject, OnInit, WritableSignal, inject, signal } from '@angular/core';
+import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { Product } from '../../models/products.model';
 import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ProductsService } from '../../services/products';
@@ -12,11 +13,12 @@ import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatIconModule } from '@angular/material/icon';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
 @Component({
   selector: 'app-product-form',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, MatDialogModule, MatFormFieldModule, MatSelectModule, MatInputModule, MatButtonModule, MatCheckboxModule, MatIconModule],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, MatDialogModule, MatFormFieldModule, MatSelectModule, MatInputModule, MatButtonModule, MatCheckboxModule, MatIconModule, InfiniteScrollDirective, MatProgressSpinnerModule],
   templateUrl: './product-form.html',
   styleUrls: ['./product-form.scss']
 })
@@ -29,13 +31,19 @@ export class ProductFormComponent implements OnInit {
   private readonly materialTypeService = inject(MaterialTypeService);
   private readonly cdr = inject(ChangeDetectorRef);
 
-  materialTypes = signal<MaterialType[]>([]);
+  materialTypes: WritableSignal<MaterialType[]> = signal([]);
 
   // Filtros para busca de matéria-prima
   searchName: string = '';
   searchUnit: string = '';
   selectedFile: File | null = null;
-  isSearching = false;
+  isSearching = signal(false);
+
+  // Estado da Paginação
+  private readonly currentPage = signal(0);
+  private readonly pageSize = 20;
+  private readonly totalElements = signal(0);
+  private readonly materialTypesSearchUrl: string | null = null;
 
   // Opções para o filtro de unidade de consumo
   consumptionUnits = [
@@ -51,6 +59,16 @@ export class ProductFormComponent implements OnInit {
   ) {
     this.product = data.product;
     this.isEditMode = !!data.isEditMode;
+
+    // Extrai e armazena a URL para buscar matérias-primas a partir do link contextual do produto
+    const searchUrl = this.product?._links?.['buscar-tipos-materia-prima']?.href;
+    if (searchUrl) {
+      // Armazena apenas a URL base, removendo o template HATEOAS.
+      this.materialTypesSearchUrl = searchUrl.split('{')[0];
+      console.log('[DEBUG] URL de busca de matéria-prima definida:', this.materialTypesSearchUrl);
+    } else {
+      console.warn('[DEBUG] Link "buscar-tipos-materia-prima" não encontrado no produto recebido.');
+    }
 
     this.productForm = this.fb.group({
       nome: [this.product.nome, Validators.required],
@@ -127,14 +145,75 @@ export class ProductFormComponent implements OnInit {
   }
 
   performSearch(): void {
-    this.isSearching = true;
-    this.materialTypeService.searchMaterialTypes({
-      nome: this.searchName,
-      unidadeDeConsumo: this.searchUnit
-    }).subscribe(types => {
-      // Adiciona a matéria-prima atual à lista de resultados, se não estiver presente.
-      this.materialTypes.set(types);
-      this.isSearching = false;
+    console.log('[DEBUG] performSearch: Iniciando busca...');
+    this.isSearching.set(true);
+    this.currentPage.set(0); // Reseta a página
+    this.materialTypes.set([]); // Limpa a lista antiga
+
+    if (!this.materialTypesSearchUrl) {
+      console.error("Não é possível buscar matérias-primas: URL não encontrada no produto.");
+      this.isSearching.set(false);
+      return;
+    }
+
+    const filters = { nome: this.searchName, unidadeDeConsumo: this.searchUnit };
+    console.log('[DEBUG] performSearch: Chamando serviço com URL e filtros:', { url: this.materialTypesSearchUrl, filters });
+
+    this.materialTypeService.searchMaterialTypes(
+      this.materialTypesSearchUrl,
+      filters,
+      this.currentPage(),
+      this.pageSize
+    ).subscribe({
+      next: response => {
+        console.log('[DEBUG] performSearch: Resposta recebida:', response);
+        this.materialTypes.set(response._embedded['tipos-materia-prima']);
+        this.totalElements.set(response.page.totalElements);
+        this.isSearching.set(false);
+      },
+      error: err => {
+        console.error('[DEBUG] performSearch: Erro na busca:', err);
+        this.isSearching.set(false);
+      }
+    });
+  }
+
+  loadMore(): void {
+    // Só carrega mais se não estiver buscando e se houver mais itens para carregar
+    if (this.isSearching() || this.materialTypes().length >= this.totalElements()) {
+      return;
+    }
+
+    console.log('[DEBUG] loadMore: Carregando próxima página...');
+    this.isSearching.set(true);
+    this.currentPage.update(page => page + 1);
+
+    if (!this.materialTypesSearchUrl) {
+      this.isSearching.set(false);
+      return;
+    }
+
+    const filters = { nome: this.searchName, unidadeDeConsumo: this.searchUnit };
+    console.log('[DEBUG] loadMore: Chamando serviço com URL e filtros:', { url: this.materialTypesSearchUrl, filters, page: this.currentPage() });
+
+    this.materialTypeService.searchMaterialTypes(
+      this.materialTypesSearchUrl,
+      filters,
+      this.currentPage(),
+      this.pageSize
+    ).subscribe({
+      next: response => {
+        console.log('[DEBUG] loadMore: Resposta recebida:', response);
+        this.materialTypes.update(currentTypes => ([
+          ...currentTypes,
+          ...response._embedded['tipos-materia-prima']
+        ]));
+        this.isSearching.set(false);
+      },
+      error: err => {
+        console.error('[DEBUG] loadMore: Erro ao carregar mais:', err);
+        this.isSearching.set(false);
+      }
     });
   }
 
