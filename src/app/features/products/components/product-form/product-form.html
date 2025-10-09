@@ -76,11 +76,16 @@
               <mat-icon>search</mat-icon>
             </button>
           </div>
-          <mat-form-field class="full-width" formGroupName="tipoMateriaPrima">
+          <mat-form-field class="full-width">
             <mat-label>Tipo de Matéria Prima</mat-label>
-            <mat-select formControlName="id" required appInfiniteScroll (infiniteScroll)="loadMore()">
+            <mat-select
+              formControlName="tipoMateriaPrima"
+              required
+              appInfiniteScroll (infiniteScroll)="loadMore()"
+              [compareWith]="compareMaterialTypes"
+              (selectionChange)="onMaterialTypeChange($event)">
               @for (materialType of materialTypes(); track materialType.id) {
-                <mat-option [value]="materialType.id">{{ materialType.nome }}</mat-option>
+                <mat-option [value]="materialType">{{ materialType.nome }}</mat-option>
               }
               @if (isSearching()) {
                 <mat-option disabled>
