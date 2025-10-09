@@ -13,6 +13,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatIconModule } from '@angular/material/icon';
+import { ConfirmDialog, ConfirmDialogData } from '../../../../shared/components/confirm-dialog/confirm-dialog/confirm-dialog';
 import { lastValueFrom } from 'rxjs';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
@@ -31,6 +32,7 @@ export class ProductFormComponent implements OnInit {
   private readonly productsService = inject(ProductsService);
   private readonly materialTypeService = inject(MaterialTypeService);
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly dialog = inject(MatDialog);
 
   materialTypes: WritableSignal<MaterialType[]> = signal([]);
 
@@ -45,7 +47,7 @@ export class ProductFormComponent implements OnInit {
   private readonly currentPage = signal(0);
   private readonly pageSize = 20;
   private readonly totalElements = signal(0);
-  private materialTypesSearchUrl: string | null = null;
+  private readonly materialTypesSearchUrl: string | null = null;
 
   // Opções para o filtro de unidade de consumo
   consumptionUnits = [
@@ -76,9 +78,7 @@ export class ProductFormComponent implements OnInit {
       cor: [this.product.cor],
       unidadesPorProduto: [this.product.unidadesPorProduto, [Validators.required, Validators.min(1)]],
       ativo: [this.product.ativo],
-      tipoMateriaPrima: this.fb.group({
-        id: [this.product.tipoMateriaPrima?.id, Validators.required]
-      }),
+      tipoMateriaPrima: [this.product.tipoMateriaPrima, Validators.required],
       dimensoesUnitarias: this.fb.group({
         larguraCm: [this.product.dimensoesUnitarias?.larguraCm, [Validators.required, Validators.min(0.1)]],
         comprimentoCm: [this.product.dimensoesUnitarias?.comprimentoCm, [Validators.required, Validators.min(0.1)]]
@@ -95,7 +95,7 @@ export class ProductFormComponent implements OnInit {
       const formValue = this.productForm.value;
       const payload = {
         ...formValue,
-        tipoMateriaPrimaId: formValue.tipoMateriaPrima.id,
+        tipoMateriaPrimaId: formValue.tipoMateriaPrima?.id,
       };
       delete payload.tipoMateriaPrima;
 
@@ -243,6 +243,33 @@ export class ProductFormComponent implements OnInit {
   getConsumptionUnitViewValue(value: string): string {
     const unit = this.consumptionUnits.find(u => u.value === value);
     return unit ? unit.viewValue : value;
+  }
+
+  compareMaterialTypes(o1: MaterialType, o2: MaterialType): boolean {
+    return o1 && o2 ? o1.id === o2.id : o1 === o2;
+  }
+
+  async onMaterialTypeChange(event: { value: MaterialType }): Promise<void> {
+    const newSelection = event.value;
+    const originalSelection = this.product.tipoMateriaPrima;
+
+    // Se a seleção não mudou ou se não havia uma seleção original, não faz nada.
+    if (!originalSelection || !newSelection || originalSelection.id === newSelection.id) {
+      return;
+    }
+
+    const dialogData: ConfirmDialogData = {
+      title: 'Confirmar Alteração',
+      message: `Deseja realmente alterar a matéria-prima de "${originalSelection.nome}" para "${newSelection.nome}"?`
+    };
+
+    const dialogRef = this.dialog.open(ConfirmDialog, { data: dialogData });
+    const confirmed = await lastValueFrom(dialogRef.afterClosed());
+
+    if (!confirmed) {
+      // Se o usuário cancelar, reverte a seleção para o valor original.
+      this.productForm.get('tipoMateriaPrima')?.setValue(originalSelection);
+    }
   }
 }
 
