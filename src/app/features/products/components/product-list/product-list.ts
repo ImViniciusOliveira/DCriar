@@ -18,6 +18,14 @@ import { ProductFormComponent, ProductFormData } from '../product-form/product-f
 import { StockService } from '../../../stock/services/stock.service';
 import { MatCardModule } from '@angular/material/card';
 
+// Constante a nível de módulo para mapear chaves de canal para nomes de exibição.
+const CHANNEL_NAME_MAP = new Map<string, string>([
+  ['LOJA_FISICA', 'Loja Física'],
+  ['SHOPEE', 'Shopee'],
+  ['SITE_PROPRIO', 'Site Próprio'],
+  ['MERCADO_LIVRE', 'Mercado Livre']
+]);
+
 @Component({
   selector: 'app-product-list',
   standalone: true,
@@ -36,6 +44,15 @@ import { MatCardModule } from '@angular/material/card';
   styleUrls: ['./product-list.scss'],
 })
 export class ProductList implements OnInit {
+  // Centraliza os textos para facilitar a manutenção e futuras traduções.
+  private static readonly Texts = {
+    deleteConfirmTitle: 'Confirmar Exclusão',
+    deleteConfirmMessage: (name: string) => `Tem certeza que deseja excluir o produto "${name}"?`,
+    deleteSuccess: 'Produto excluído com sucesso!',
+    saveSuccess: 'Produto salvo com sucesso!',
+    createSuccess: 'Produto cadastrado com sucesso!',
+    deleteError: 'Falha ao excluir o produto.',
+  };
   private readonly productsService = inject(ProductsService);
   private readonly stockService = inject(StockService);
   private readonly dialog = inject(MatDialog);
@@ -51,13 +68,6 @@ export class ProductList implements OnInit {
   pageIndex = signal(0);
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
-
-  private static readonly channelNameMap = new Map<string, string>([
-    ['LOJA_FISICA', 'Loja Física'],
-    ['SHOPEE', 'Shopee'],
-    ['SITE_PROPRIO', 'Site Próprio'],
-    ['MERCADO_LIVRE', 'Mercado Livre']
-  ]);
 
   ngOnInit(): void {
     this.loadProducts();
@@ -101,8 +111,8 @@ export class ProductList implements OnInit {
 
   async onDelete(product: Product): Promise<void> {
     const dialogData: ConfirmDialogData = {
-      title: 'Confirmar Exclusão',
-      message: `Tem certeza que deseja excluir o produto "${product.nome}"?`,
+      title: ProductList.Texts.deleteConfirmTitle,
+      message: ProductList.Texts.deleteConfirmMessage(product.nome),
     };
 
     const dialogRef = this.dialog.open(ConfirmDialog, { data: dialogData });
@@ -115,11 +125,11 @@ export class ProductList implements OnInit {
           throw new Error('URL de exclusão não encontrada.');
         }
         await lastValueFrom(this.productsService.deleteProduct(deleteUrl));
-        this.snackBar.open('Produto excluído com sucesso!', 'Fechar', { duration: 3000 });
+        this.snackBar.open(ProductList.Texts.deleteSuccess, 'Fechar', { duration: 3000 });
         await this.loadProducts(); // Recarrega a lista
       } catch (error) {
         console.error('Erro ao excluir produto:', error);
-        this.snackBar.open('Falha ao excluir o produto.', 'Fechar', { duration: 3000 });
+        this.snackBar.open(ProductList.Texts.deleteError, 'Fechar', { duration: 3000 });
       }
     }
   }
@@ -143,7 +153,7 @@ export class ProductList implements OnInit {
     });
 
     dialogRef.afterClosed().pipe(filter(result => result === true)).subscribe(() => {
-      this.snackBar.open('Produto salvo com sucesso!', 'Fechar', {
+      this.snackBar.open(ProductList.Texts.saveSuccess, 'Fechar', {
         duration: 3000,
       });
       this.loadProducts();
@@ -168,12 +178,12 @@ export class ProductList implements OnInit {
     });
 
     dialogRef.afterClosed().pipe(filter(result => result === true)).subscribe(() => {
-      this.snackBar.open('Produto cadastrado com sucesso!', 'Fechar', { duration: 3000 });
+      this.snackBar.open(ProductList.Texts.createSuccess, 'Fechar', { duration: 3000 });
       this.loadProducts();
     });
   }
 
   getChannelDisplayName(channelKey: string): string {
-    return ProductList.channelNameMap.get(channelKey) || channelKey;
+    return CHANNEL_NAME_MAP.get(channelKey) || channelKey;
   }
 }

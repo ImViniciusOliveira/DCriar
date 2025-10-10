@@ -1,7 +1,6 @@
 .material-type-search {
-  border: 1px solid #ccc;
+  border: 1px solid var(--mat-sys-outline-variant);
   border-radius: 4px;
-  border-color: rgba(0,0,0,.12);
   padding: 16px;
   margin-bottom: 16px;
 
@@ -30,13 +29,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #f0f0f0;
+  background-color: var(--mat-sys-surface-container-lowest);
   border-radius: 4px;
 
   img {
     max-width: 200px;
     max-height: 200px;
-    border: 1px solid #ccc;
+    border: 1px solid var(--mat-sys-outline-variant);
     border-radius: 4px;
   }
 
@@ -46,7 +45,8 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: rgba(0, 0, 0, 0.5);
+    // Usa a mesma cor de "névoa" do spinner da tabela para consistência.
+    background-color: rgba(var(--mat-sys-surface-rgb), 0.8);
     border-radius: 4px;
     display: flex;
     align-items: center;
@@ -86,7 +86,7 @@
 .dimensions-title {
     margin-top: 16px;
     margin-bottom: 8px;
-    color: rgba(0,0,0,.6);
+    color: var(--mat-sys-on-surface-variant);
 }
 
 .mat-mdc-dialog-actions {
@@ -108,7 +108,7 @@
     flex-shrink: 0;
     width: 200px;
     height: 200px;
-    border: 1px solid rgba(0,0,0,.12);
+    border: 1px solid var(--mat-sys-outline-variant);
     border-radius: 4px;
     display: flex;
     align-items: center;
@@ -125,7 +125,7 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      color: rgba(0,0,0,.4);
+      color: var(--mat-sys-on-surface-variant);
       mat-icon {
         font-size: 48px;
         width: 48px;
@@ -150,7 +150,7 @@
 
   hr {
     border: none;
-    border-top: 1px solid rgba(0,0,0,.12);
+    border-top: 1px solid var(--mat-sys-outline-variant);
     margin: 16px 0;
   }
 }
@@ -158,4 +158,11 @@
 // Aumenta a altura do campo de descrição
 textarea[formControlName="descricao"] {
   min-height: 100px;
+}
+
+.spinner-option {
+  .mat-mdc-option-text {
+    display: flex;
+    justify-content: center;
+  }
 }

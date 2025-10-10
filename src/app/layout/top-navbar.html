@@ -3,13 +3,12 @@
 
   <span class="spacer"></span>
 
-  @if (apiRoot.endpoints(); as endpoints) {
-    @for (link of objectKeys(endpoints._links); track link) {
-      @if (!endpoints._links[link].templated) {
-        <a mat-button [routerLink]="link" class="nav-link">
-          <span>{{ link }}</span>
-        </a>
+  @for (link of availableNavLinks; track link.path) {
+    <a mat-button [routerLink]="link.path" class="nav-link">
+      @if(link.icon) {
+        <mat-icon>{{ link.icon }}</mat-icon>
       }
-    }
+      <span>{{ link.label }}</span>
+    </a>
   }
 </mat-toolbar>

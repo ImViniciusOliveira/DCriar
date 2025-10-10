@@ -1,9 +1,10 @@
 .product-details {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
+  p {
+    margin: 0 0 12px;
+  }
 
-button {
-  margin-top: 16px;
+  strong {
+    font-weight: 500;
+    margin-right: 8px;
+  }
 }

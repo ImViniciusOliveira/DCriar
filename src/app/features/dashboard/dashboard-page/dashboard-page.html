@@ -1,20 +1,19 @@
-<h1>Endpoints da API</h1>
+<h1 class="mat-headline-medium">Endpoints da API</h1>
 
 @if (apiRoot.endpoints(); as endpoints) {
-  <ul>
+  <mat-list>
     @for (link of objectKeys(endpoints._links); track link) {
-      <li>
-        <strong>{{ link }}:</strong>
-        <a [href]="endpoints._links[link].href" target="_blank">
+      <mat-list-item>
+        <span class="endpoint-key">{{ link }}:</span>
+        <a mat-button [href]="endpoints._links[link].href" target="_blank">
           {{ endpoints._links[link].href }}
         </a>
         @if (endpoints._links[link].templated) {
-          <span>(templated)</span>
+          <span class="templated-label">(templated)</span>
         }
-      </li>
+      </mat-list-item>
     }
-  </ul>
+  </mat-list>
 } @else {
   <p>Carregando endpoints...</p>
 }
-

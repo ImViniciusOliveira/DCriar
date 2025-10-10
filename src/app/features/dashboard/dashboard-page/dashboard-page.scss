@@ -1,0 +1,11 @@
+.endpoint-key {
+  font-weight: 500;
+  min-width: 200px;
+}
+
+.templated-label {
+  // Usa a cor de texto secundária definida no :root
+  color: var(--mat-sys-on-surface-variant);
+  font-style: italic;
+  margin-left: 16px;
+}

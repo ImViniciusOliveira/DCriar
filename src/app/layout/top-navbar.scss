@@ -1,7 +1,17 @@
+// Define a cor de fundo da barra de navegação principal.
+:host mat-toolbar {
+  // Usa uma cor de superfície do tema do Material 3 para o modo claro.
+  background-color: var(--mat-sys-surface-container-highest);
+  color: var(--mat-sys-on-surface);
+}
+
 .spacer {
   flex: 1 1 auto;
 }
 
 .nav-link {
-  text-transform: capitalize;
+  // Adiciona margem à esquerda do texto apenas se ele for precedido por um ícone.
+  mat-icon + span {
+    margin-left: 8px;
+  }
 }

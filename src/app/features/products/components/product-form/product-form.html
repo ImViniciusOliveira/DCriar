@@ -58,17 +58,17 @@
 
         <fieldset class="material-type-search">
           <legend>Matéria-Prima</legend>
-          <div class="search-filters">
+          <div class="search-filters" [formGroup]="searchForm">
             <mat-form-field>
               <mat-label>Buscar por nome</mat-label>
-              <input matInput [(ngModel)]="searchName" name="searchName" (keyup.enter)="performSearch()" [ngModelOptions]="{standalone: true}">
+              <input matInput formControlName="searchName" (keyup.enter)="performSearch()">
             </mat-form-field>
             <mat-form-field>
               <mat-label>Filtrar por Unidade</mat-label>
-              <mat-select [(ngModel)]="searchUnit" name="searchUnit" [ngModelOptions]="{standalone: true}">
+              <mat-select formControlName="searchUnit">
                 <mat-option value="">Todos</mat-option>
-            @for (unit of consumptionUnits; track unit.value) {
-              <mat-option [value]="unit.value">{{ unit.viewValue }}</mat-option>
+                @for (unit of consumptionUnits; track unit.value) {
+                  <mat-option [value]="unit.value">{{ unit.viewValue }}</mat-option>
                 }
               </mat-select>
             </mat-form-field>
@@ -88,10 +88,8 @@
                 <mat-option [value]="materialType">{{ materialType.nome }}</mat-option>
               }
               @if (isSearching()) {
-                <mat-option disabled>
-                  <div class="spinner-container">
-                    <mat-spinner diameter="20"></mat-spinner>
-                  </div>
+                <mat-option disabled class="spinner-option">
+                  <mat-spinner diameter="20"></mat-spinner>
                 </mat-option>
               }
             </mat-select>

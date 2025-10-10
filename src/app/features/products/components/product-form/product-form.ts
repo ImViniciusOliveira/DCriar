@@ -17,6 +17,13 @@ import { ConfirmDialog, ConfirmDialogData } from '../../../../shared/components/
 import { lastValueFrom } from 'rxjs';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
+// Constantes do módulo, não precisam pertencer à classe.
+const CONSUMPTION_UNITS = [
+  { value: 'CENTIMETRO_QUADRADO', viewValue: 'Centímetro Quadrado' },
+  { value: 'UNIDADE', viewValue: 'Unidade' },
+  { value: 'METRO_LINEAR', viewValue: 'Metro Linear' }
+];
+
 @Component({
   selector: 'app-product-form',
   standalone: true,
@@ -25,6 +32,11 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
   styleUrls: ['./product-form.scss']
 })
 export class ProductFormComponent implements OnInit {
+  // Constantes para o diálogo de confirmação, facilitando a manutenção.
+  private static readonly CONFIRM_CHANGE_TITLE = 'Confirmar Alteração';
+  private static readonly CONFIRM_CHANGE_MESSAGE = (original: string, novo: string) =>
+    `Deseja realmente alterar a matéria-prima de "${original}" para "${novo}"?`;
+
   product!: Product;
   isEditMode: boolean;
 
@@ -34,11 +46,8 @@ export class ProductFormComponent implements OnInit {
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly dialog = inject(MatDialog);
 
+  searchForm: FormGroup;
   materialTypes: WritableSignal<MaterialType[]> = signal([]);
-
-  // Filtros para busca de matéria-prima
-  searchName: string = '';
-  searchUnit: string = '';
   selectedFile: File | null = null;
   isSearching = signal(false);
   isUploading = signal(false);
@@ -49,12 +58,8 @@ export class ProductFormComponent implements OnInit {
   private readonly totalElements = signal(0);
   private readonly materialTypesSearchUrl: string | null = null;
 
-  // Opções para o filtro de unidade de consumo
-  consumptionUnits = [
-    { value: 'CENTIMETRO_QUADRADO', viewValue: 'Centímetro Quadrado' },
-    { value: 'UNIDADE', viewValue: 'Unidade' },
-    { value: 'METRO_LINEAR', viewValue: 'Metro Linear' }
-  ];
+  // Expõe a constante para o template.
+  readonly consumptionUnits = CONSUMPTION_UNITS;
 
   constructor(
     public dialogRef: MatDialogRef<ProductFormComponent>,
@@ -64,10 +69,8 @@ export class ProductFormComponent implements OnInit {
     this.product = data.product;
     this.isEditMode = !!data.isEditMode;
 
-    // Extrai e armazena a URL para buscar matérias-primas a partir do link contextual do produto
     const searchUrl = this.product?._links?.['buscar-tipos-materia-prima']?.href;
     if (searchUrl) {
-      // Armazena apenas a URL base, removendo o template HATEOAS.
       this.materialTypesSearchUrl = searchUrl.split('{')[0];
     }
 
@@ -83,6 +86,11 @@ export class ProductFormComponent implements OnInit {
         larguraCm: [this.product.dimensoesUnitarias?.larguraCm, [Validators.required, Validators.min(0.1)]],
         comprimentoCm: [this.product.dimensoesUnitarias?.comprimentoCm, [Validators.required, Validators.min(0.1)]]
       })
+    });
+
+    this.searchForm = this.fb.group({
+      searchName: [''],
+      searchUnit: ['']
     });
   }
 
@@ -118,20 +126,18 @@ export class ProductFormComponent implements OnInit {
 
   ngOnInit(): void {
     if (this.isEditMode) {
-      // Garante que a matéria-prima atual do produto esteja na lista de opções.
       if (this.product.tipoMateriaPrima) {
         this.materialTypes.set([this.product.tipoMateriaPrima]);
       }
     }
 
-    // Garante que `dimensoesUnitarias` exista e seja populado corretamente.
     if (this.product) {
       if (this.product.dimensoes && !this.product.dimensoesUnitarias) {
-        // Se `dimensoes` existe (vindo da API) mas `dimensoesUnitarias` não, mapeia os valores.
-        // Isso é útil para o modo de edição.
+        // Mapeia o objeto `dimensoes` (da API) para `dimensoesUnitarias` (do formulário)
+        // para popular os campos de dimensão no modo de edição.
         this.product.dimensoesUnitarias = {
-          larguraCm: this.product.dimensoes.largura, // Mapeia para o formulário
-          comprimentoCm: this.product.dimensoes.comprimento // Mapeia para o formulário
+          larguraCm: this.product.dimensoes.largura,
+          comprimentoCm: this.product.dimensoes.comprimento
         };
         this.productForm.patchValue({ dimensoesUnitarias: this.product.dimensoesUnitarias });
       }
@@ -144,7 +150,7 @@ export class ProductFormComponent implements OnInit {
     try {
       this.currentPage.set(0); // Reseta a página
 
-      // No modo de edição, mantém a matéria-prima atual na lista para não perdê-la de vista.
+      // No modo de edição, mantém a matéria-prima atual na lista para não perdê-la de vista ao filtrar.
       const initialMaterialTypes = (this.isEditMode && this.product.tipoMateriaPrima)
         ? [this.product.tipoMateriaPrima]
         : [];
@@ -155,7 +161,7 @@ export class ProductFormComponent implements OnInit {
         return;
       }
 
-      const filters = { nome: this.searchName, unidadeDeConsumo: this.searchUnit };
+      const filters = this.searchForm.value;
 
       const response = await lastValueFrom(
         this.materialTypeService.searchMaterialTypes(
@@ -168,7 +174,7 @@ export class ProductFormComponent implements OnInit {
 
       const newMaterials = response._embedded['tipos-materia-prima'];
 
-      // Adiciona os novos resultados, garantindo que o item inicial (se houver) não seja duplicado.
+      // Adiciona os novos resultados, evitando duplicatas caso o item atual já esteja na lista.
       this.materialTypes.update(currentTypes => {
         const currentIds = new Set(currentTypes.map(t => t.id));
         const filteredNew = newMaterials.filter(t => !currentIds.has(t.id));
@@ -183,7 +189,7 @@ export class ProductFormComponent implements OnInit {
   }
 
   async loadMore(): Promise<void> {
-    // Só carrega mais se não estiver buscando e se houver mais itens para carregar
+    // Previne múltiplas chamadas e só carrega mais se houver itens restantes.
     if (this.isSearching() || this.materialTypes().length >= this.totalElements()) {
       return;
     }
@@ -195,7 +201,7 @@ export class ProductFormComponent implements OnInit {
 
       if (!this.materialTypesSearchUrl) return;
 
-      const filters = { nome: this.searchName, unidadeDeConsumo: this.searchUnit };
+      const filters = this.searchForm.value;
 
       const response = await lastValueFrom(this.materialTypeService.searchMaterialTypes(this.materialTypesSearchUrl, filters, this.currentPage(), this.pageSize));
 
@@ -218,7 +224,7 @@ export class ProductFormComponent implements OnInit {
     if (this.selectedFile && this.product.id) {
       this.isUploading.set(true);
       try {
-        // ETAPA 1: Fazer o upload da imagem
+        // 1. Fazer o upload da imagem
         const uploadResponse = await lastValueFrom(this.productsService.uploadImage(this.selectedFile));
         const imageUrl = uploadResponse.fileDownloadUri;
         const updateUrl = this.product._links['atualizar-produto']?.href;
@@ -227,7 +233,7 @@ export class ProductFormComponent implements OnInit {
           console.error('URL de atualização não encontrada para o produto.');
           return;
         }
-        // Etapa 2: Atualizar o produto com a URL da imagem
+        // 2. Atualizar o produto com a URL da imagem
         const updatedProduct = await lastValueFrom(this.productsService.updateProductPhotoUrl(updateUrl, this.product, imageUrl));
         this.product.fotoPrincipalUrl = updatedProduct.fotoPrincipalUrl; // Atualiza a interface
         this.selectedFile = null; // Limpa a seleção do arquivo
@@ -241,7 +247,7 @@ export class ProductFormComponent implements OnInit {
   }
 
   getConsumptionUnitViewValue(value: string): string {
-    const unit = this.consumptionUnits.find(u => u.value === value);
+    const unit = CONSUMPTION_UNITS.find(u => u.value === value);
     return unit ? unit.viewValue : value;
   }
 
@@ -253,21 +259,21 @@ export class ProductFormComponent implements OnInit {
     const newSelection = event.value;
     const originalSelection = this.product.tipoMateriaPrima;
 
-    // Se a seleção não mudou ou se não havia uma seleção original, não faz nada.
+    // Só exibe o diálogo de confirmação se a matéria-prima for realmente alterada.
     if (!originalSelection || !newSelection || originalSelection.id === newSelection.id) {
       return;
     }
 
     const dialogData: ConfirmDialogData = {
-      title: 'Confirmar Alteração',
-      message: `Deseja realmente alterar a matéria-prima de "${originalSelection.nome}" para "${newSelection.nome}"?`
+      title: ProductFormComponent.CONFIRM_CHANGE_TITLE,
+      message: ProductFormComponent.CONFIRM_CHANGE_MESSAGE(originalSelection.nome, newSelection.nome)
     };
 
     const dialogRef = this.dialog.open(ConfirmDialog, { data: dialogData });
     const confirmed = await lastValueFrom(dialogRef.afterClosed());
 
     if (!confirmed) {
-      // Se o usuário cancelar, reverte a seleção para o valor original.
+      // Se o usuário cancelar, reverte a seleção no formulário para o valor original.
       this.productForm.get('tipoMateriaPrima')?.setValue(originalSelection);
     }
   }
