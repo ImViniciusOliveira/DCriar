@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { BehaviorSubject, Observable, filter, map, switchMap, tap, shareReplay, combineLatest, take } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
+import { BehaviorSubject, Observable, filter, map, switchMap, tap, shareReplay, take, catchError, of } from 'rxjs';
 import { toObservable } from '@angular/core/rxjs-interop';
 
 import { ApiRoot } from '../../../core/services/api-root';
@@ -14,7 +14,6 @@ export class ProductsService {
   private readonly http = inject(HttpClient);
   private readonly apiRoot = inject(ApiRoot);
 
-  // Usamos um BehaviorSubject para controlar o recarregamento dos dados.
   private readonly refresh$ = new BehaviorSubject<void>(undefined);
 
   private readonly endpoints$ = toObservable(this.apiRoot.endpoints).pipe(
@@ -22,35 +21,33 @@ export class ProductsService {
     shareReplay(1)
   );
 
-  private readonly products$: Observable<ApiResponseProducts>;
-
-  constructor() {
-    // A lógica de busca agora fica no construtor, que é um contexto de injeção.
-    this.products$ = combineLatest([this.refresh$, this.endpoints$]).pipe(
-      map(([, endpoints]) => this.getProductUrl(endpoints)),
-      switchMap((url) => this.fetchProducts(url, 0, 10)),
-      shareReplay({
-        bufferSize: 1, // Armazena o último valor em cache.
-        refCount: true, // O cache é limpo quando não há mais assinantes.
-      })
+  getProducts(page: number = 0, size: number = 10): Observable<ApiResponseProducts> {
+    return this.endpoints$.pipe(
+      map((endpoints) => this.getProductUrl(endpoints)),
+      switchMap((url) =>
+        this.fetchProducts(url, page, size).pipe(
+          map(response => this.transformProductResponse(response, size)),
+          catchError((err) => {
+            console.error(`Falha ao buscar produtos na página ${page}, tamanho ${size}`, err); // TODO: Adicionar notificação ao usuário
+            return of({ _embedded: { produtos: [] }, _links: {}, page: { size: 0, totalElements: 0, totalPages: 0, number: 0 } } as ApiResponseProducts);
+          })
+        )
+      ),
+      take(1)
     );
   }
 
-  getProducts(page: number = 0, size: number = 10): Observable<ApiResponseProducts> {
-    // A new fetch is triggered for each call, respecting pagination
+  getProductById(id: number): Observable<Product> {
     return this.endpoints$.pipe(
-      map((endpoints) => this.getProductUrl(endpoints)),
-      switchMap((url) => this.fetchProducts(url, page, size)),
+      map(endpoints => this.getProductUrl(endpoints)),
+      switchMap(baseUrl => this.http.get<any>(`${baseUrl}/${id}`)),
       take(1)
     );
   }
 
   private fetchProducts(url: string, page: number, size: number): Observable<ApiResponseProducts> {
-    const params = new HttpParams()
-      .set('page', page.toString())
-      .set('size', size.toString())
-      .set('sort', 'nome,ASC');
-    return this.http.get<ApiResponseProducts>(url, { params });
+    const fullUrl = url.replace('{?page,size,sort}', `?page=${page}&size=${size}&sort=nome,ASC`); // TODO: Implementar ordenação dinâmica
+    return this.http.get<ApiResponseProducts>(fullUrl);
   }
 
   deleteProduct(url: string): Observable<void> {
@@ -64,60 +61,52 @@ export class ProductsService {
   }
 
   createProduct(product: Partial<Product>): Observable<Product> {
-    const endpoints = this.apiRoot.endpoints(); // Obtém o valor atual do sinal
-    if (!endpoints) {
-      throw new Error('Os endpoints não foram carregados. Certifique-se de que o método loadEndpoints foi chamado.');
-    }
-    const url = endpoints._links['produtos']?.href;
-    if (!url) {
-      throw new Error('URL de produtos não encontrada na resposta da API');
-    }
-    return this.http.post<Product>(url, product).pipe(
-      tap(() => this.refresh$.next()) // Dispara o recarregamento da lista de produtos.
+    return this.endpoints$.pipe(
+      map(endpoints => this.getProductUrl(endpoints)),
+      switchMap(url => this.http.post<Product>(url, product)),
+      tap(() => this.refresh$.next())
     );
   }
 
-  patchProduct(url: string, product: Partial<Product>): Observable<Product> {
-    return this.http.patch<Product>(url, product).pipe(
-      tap(() => this.refresh$.next()) // Dispara o recarregamento da lista de produtos.
+  patchProduct(productId: number, product: Partial<Product>): Observable<Product> {
+    if (!product.id) {
+      delete product.id;
+    }
+    return this.endpoints$.pipe(
+      map(endpoints => this.getProductUrl(endpoints)),
+      switchMap(baseUrl => this.http.patch<Product>(`${baseUrl}/${productId}`, product)),
+      tap(() => this.refresh$.next())
     );
   }
 
-  /**
-   * Etapa 1: Envia uma imagem para o endpoint de upload genérico.
-   * @returns Um observable com a URL do arquivo enviado.
-   */
-  uploadImage(file: File): Observable<{ fileDownloadUri: string }> {
+  uploadProductPhoto(uploadUrl: string, file: File): Observable<Product> {
     const formData = new FormData();
     formData.append('file', file);
-    // Utiliza a URL de upload do HATEOAS, se disponível, ou um fallback.
-    return this.endpoints$.pipe(
-      switchMap(endpoints => {
-        const uploadUrl = endpoints._links['upload']?.href || '/api/v1/uploads';
-        return this.http.post<{ fileDownloadUri: string }>(uploadUrl, formData);
-      })
-    );
-  }
 
-  /**
-   * Etapa 2: Atualiza a URL da foto do produto.
-   */
-  updateProductPhotoUrl(productUpdateUrl: string, product: Product, imageUrl: string): Observable<Product> {
-    // Envia apenas os campos necessários para a atualização, evitando o envio de objetos complexos.
-    const payload = {
-      ...product, // Envia o objeto completo do produto
-      fotoPrincipalUrl: imageUrl, // Sobrescreve a URL da imagem
-      tipoMateriaPrimaId: product.tipoMateriaPrima?.id, // Garante que o ID da matéria-prima seja enviado
-    };
-    return this.patchProduct(productUpdateUrl, payload);
+    return this.http.post<Product>(uploadUrl, formData)
+      .pipe(tap(() => this.refresh$.next()));
   }
 
   private getProductUrl(endpoints: Hateoas): string {
-    const url = endpoints?._links['produtos']?.href;
+    const url = endpoints?._links?.['produtos']?.href;
     if (!url) {
       throw new Error('URL de produtos não encontrada na resposta da API');
     }
-    // Retorna a URL base, removendo os templates HATEOAS
-    return url.split('{')[0];
+    return url;
+  }
+
+  private transformProductResponse(response: any, size: number): ApiResponseProducts {
+    const produtos = (response.produtos || []);
+
+    return {
+      _embedded: { produtos },
+      _links: response._links || {},
+      page: {
+        size: size,
+        totalElements: response.total || 0,
+        totalPages: Math.ceil((response.total || 0) / size),
+        number: response.pagina > 0 ? response.pagina - 1 : 0,
+      },
+    };
   }
 }

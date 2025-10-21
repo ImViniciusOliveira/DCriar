@@ -1,6 +1,5 @@
 .page-card {
   margin: 24px;
-  // Aplica a cor de fundo ao card principal da página.
   background-color: var(--mat-sys-surface-container-highest);
 }
 
@@ -20,7 +19,6 @@
 .spinner-container {
   position: absolute;
   inset: 0;
-  // Usa uma cor do tema com transparência para um efeito de "névoa" no modo claro.
   background: rgba(var(--mat-sys-surface-rgb), 0.8);
   z-index: 10;
   display: flex;
@@ -31,14 +29,12 @@
 .table-container {
   position: relative;
   border-radius: 8px;
-  overflow-x: auto; // Permite rolagem horizontal se necessário
+  overflow-x: auto;
 
-  max-height: 70vh; // Define uma altura máxima para a tabela
+  max-height: 70vh;
 }
 
-// Adiciona feedback visual ao passar o mouse sobre as linhas da tabela
 ::ng-deep .mat-mdc-table tbody tr:hover {
-  // Usa um tom ligeiramente mais escuro para o hover, para que se destaque do novo fundo.
   background-color: var(--mat-sys-surface-container-high) !important;
 }
 

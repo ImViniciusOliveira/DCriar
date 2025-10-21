@@ -1,4 +1,4 @@
-<h2 mat-dialog-title>{{ data.isCreationMode ? 'Cadastrar Produto' : (isEditMode ? 'Editar Produto' : 'Detalhes do Produto') }}</h2>
+<h2 mat-dialog-title>{{ data.title }}</h2>
 @if (isEditMode || data.isCreationMode) {
   <form [formGroup]="productForm" (ngSubmit)="onSubmit()">
     <mat-dialog-content>
@@ -79,7 +79,7 @@
           <mat-form-field class="full-width">
             <mat-label>Tipo de Matéria Prima</mat-label>
             <mat-select
-              formControlName="tipoMateriaPrima"
+              formControlName="materiaPrima"
               required
               appInfiniteScroll (infiniteScroll)="loadMore()"
               [compareWith]="compareMaterialTypes"
@@ -97,7 +97,7 @@
         </fieldset>
 
         <h3 class="dimensions-title mat-subheading-2">Dimensões Unitárias</h3>
-        <div class="dimensions-group" formGroupName="dimensoesUnitarias">
+        <div class="dimensions-group" formGroupName="dimensoes">
           <mat-form-field>
             <mat-label>Largura (cm)</mat-label>
             <input matInput type="number" formControlName="larguraCm" required>
@@ -129,7 +129,7 @@
       <div class="details-info">
         <p><strong>SKU:</strong> {{ product.sku }}</p>
         <p><strong>Cor:</strong> {{ product.cor }}</p>
-        <p><strong>Dimensões:</strong> {{ product.dimensoes?.largura }} x {{ product.dimensoes?.comprimento }} cm</p>
+        <p><strong>Dimensões:</strong> {{ product.dimensoes.larguraCm }} x {{ product.dimensoes.comprimentoCm }} cm</p>
         <p><strong>Ativo:</strong> {{ product.ativo ? 'Sim' : 'Não' }}</p>
         <hr>
         <p><strong>Estoque Físico Total:</strong> {{ product.estoqueFisicoTotal }} pacotes</p>
@@ -137,9 +137,9 @@
         <p><strong>Disponível para Alocar:</strong> {{ product.estoqueDisponivelParaAlocar }} pacotes</p>
         <p><strong>Unidades por Pacote:</strong> {{ product.unidadesPorProduto }}</p>
         <hr>
-        @if (product.tipoMateriaPrima) {
-          <p><strong>Matéria-Prima:</strong> {{ product.tipoMateriaPrima.nome }}</p>
-          <p><strong>Unidade de Consumo:</strong> {{ getConsumptionUnitViewValue(product.tipoMateriaPrima.unidadeDeConsumo) }}</p>
+        @if (product.materiaPrima) {
+          <p><strong>Matéria-Prima:</strong> {{ product.materiaPrima.nome }}</p>
+          <p><strong>Unidade de Consumo:</strong> {{ getConsumptionUnitViewValue(product.materiaPrima.unidadeDeConsumo) }}</p>
         }
       </div>
     </div>

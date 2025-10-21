@@ -18,22 +18,22 @@
         </div>
       }
       <div class="mat-elevation-z8 table-container">
-        <table mat-table [dataSource]="products()">
+        <table mat-table [dataSource]="products()" matSort (matSortChange)="sortData($event)">
           <!-- Coluna SKU -->
           <ng-container matColumnDef="sku">
-            <th mat-header-cell *matHeaderCellDef>SKU</th>
+            <th mat-header-cell *matHeaderCellDef mat-sort-header="sku">SKU</th>
             <td mat-cell *matCellDef="let product">{{ product.sku }}</td>
           </ng-container>
 
           <!-- Coluna Nome -->
           <ng-container matColumnDef="nome">
-            <th mat-header-cell *matHeaderCellDef>Produto</th>
+            <th mat-header-cell *matHeaderCellDef mat-sort-header="nome">Produto</th>
             <td mat-cell *matCellDef="let product">{{ product.nome }}</td>
           </ng-container>
 
           <!-- Coluna Estoque -->
           <ng-container matColumnDef="estoque">
-            <th mat-header-cell *matHeaderCellDef>Estoque Total</th>
+            <th mat-header-cell *matHeaderCellDef mat-sort-header="estoque">Estoque Total</th>
             <td mat-cell *matCellDef="let product">
               {{ product.estoqueFisicoTotal }} pacotes
               <br />
@@ -43,8 +43,22 @@
 
           <!-- Coluna Cor -->
           <ng-container matColumnDef="cor">
-            <th mat-header-cell *matHeaderCellDef>Cor</th>
+            <th mat-header-cell *matHeaderCellDef mat-sort-header="cor">Cor</th>
             <td mat-cell *matCellDef="let product">{{ product.cor }}</td>
+          </ng-container>
+
+          <!-- Coluna Dimensões -->
+          <ng-container matColumnDef="dimensoes">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header="dimensoes">Dimensões</th>
+            <td mat-cell *matCellDef="let product">{{ product.dimensoes?.larguraCm }} x {{ product.dimensoes?.comprimentoCm }} cm</td>
+          </ng-container>
+
+          <!-- Coluna Ativo -->
+          <ng-container matColumnDef="ativo">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header="ativo">Ativo</th>
+            <td mat-cell *matCellDef="let product">
+              <mat-icon>{{ product.ativo ? 'check_circle' : 'cancel' }}</mat-icon>
+            </td>
           </ng-container>
 
           <!-- Coluna Estoque por Canal -->

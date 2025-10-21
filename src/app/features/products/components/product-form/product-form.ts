@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ChangeDetectorRef, Component, Inject, OnInit, WritableSignal, inject, signal } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { Product } from '../../models/products.model';
-import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormArray, FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ProductsService } from '../../services/products';
 import { MaterialTypeService } from '../../../stock/services/material-type.service';
 import { MaterialType } from '../../../stock/models/material-type.model';
@@ -17,7 +17,6 @@ import { ConfirmDialog, ConfirmDialogData } from '../../../../shared/components/
 import { lastValueFrom } from 'rxjs';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
-// Constantes do módulo, não precisam pertencer à classe.
 const CONSUMPTION_UNITS = [
   { value: 'CENTIMETRO_QUADRADO', viewValue: 'Centímetro Quadrado' },
   { value: 'UNIDADE', viewValue: 'Unidade' },
@@ -32,7 +31,6 @@ const CONSUMPTION_UNITS = [
   styleUrls: ['./product-form.scss']
 })
 export class ProductFormComponent implements OnInit {
-  // Constantes para o diálogo de confirmação, facilitando a manutenção.
   private static readonly CONFIRM_CHANGE_TITLE = 'Confirmar Alteração';
   private static readonly CONFIRM_CHANGE_MESSAGE = (original: string, novo: string) =>
     `Deseja realmente alterar a matéria-prima de "${original}" para "${novo}"?`;
@@ -52,13 +50,11 @@ export class ProductFormComponent implements OnInit {
   isSearching = signal(false);
   isUploading = signal(false);
 
-  // Estado da Paginação
   private readonly currentPage = signal(0);
   private readonly pageSize = 20;
   private readonly totalElements = signal(0);
   private readonly materialTypesSearchUrl: string | null = null;
 
-  // Expõe a constante para o template.
   readonly consumptionUnits = CONSUMPTION_UNITS;
 
   constructor(
@@ -81,10 +77,10 @@ export class ProductFormComponent implements OnInit {
       cor: [this.product.cor],
       unidadesPorProduto: [this.product.unidadesPorProduto, [Validators.required, Validators.min(1)]],
       ativo: [this.product.ativo],
-      tipoMateriaPrima: [this.product.tipoMateriaPrima, Validators.required],
-      dimensoesUnitarias: this.fb.group({
-        larguraCm: [this.product.dimensoesUnitarias?.larguraCm, [Validators.required, Validators.min(0.1)]],
-        comprimentoCm: [this.product.dimensoesUnitarias?.comprimentoCm, [Validators.required, Validators.min(0.1)]]
+      materiaPrima: [this.product.materiaPrima, Validators.required],
+      dimensoes: this.fb.group({
+        larguraCm: [this.product.dimensoes?.larguraCm, [Validators.required, Validators.min(0.1)]],
+        comprimentoCm: [this.product.dimensoes?.comprimentoCm, [Validators.required, Validators.min(0.1)]]
       })
     });
 
@@ -96,29 +92,27 @@ export class ProductFormComponent implements OnInit {
 
   async onSubmit(): Promise<void> {
     if (this.productForm.invalid) {
-      return; // Impede o envio se o formulário for inválido
+      return;
     }
 
     try {
-      const formValue = this.productForm.value;
-      const payload = {
-        ...formValue,
-        tipoMateriaPrimaId: formValue.tipoMateriaPrima?.id,
-      };
-      delete payload.tipoMateriaPrima;
+      const dirtyValues = this.getDirtyValues(this.productForm);
 
       if (this.isEditMode) {
-        const updateUrl = this.product._links['atualizar-produto']?.href;
-        if (!updateUrl) {
-          console.error('URL de atualização não encontrada para o produto.');
+        if (!this.product.id) {
+          console.error('ID do produto não encontrado, não é possível atualizar.', this.product);
           return;
         }
-        await lastValueFrom(this.productsService.patchProduct(updateUrl, payload));
+        this.product = await lastValueFrom(this.productsService.patchProduct(this.product.id, dirtyValues));
       } else { // Modo de Criação
-        await lastValueFrom(this.productsService.createProduct(payload));
+        const formValue = { ...this.productForm.value };
+        if (formValue.materiaPrima?.id) {
+          formValue.materiaPrima = { id: formValue.materiaPrima.id };
+        }
+        await lastValueFrom(this.productsService.createProduct(formValue));
       }
 
-      this.dialogRef.close(true); // Fecha o diálogo e sinaliza sucesso
+      this.dialogRef.close(true);
     } catch (error) {
       console.error(this.isEditMode ? 'Erro ao atualizar o produto:' : 'Erro ao criar o produto:', error);
     }
@@ -126,20 +120,8 @@ export class ProductFormComponent implements OnInit {
 
   ngOnInit(): void {
     if (this.isEditMode) {
-      if (this.product.tipoMateriaPrima) {
-        this.materialTypes.set([this.product.tipoMateriaPrima]);
-      }
-    }
-
-    if (this.product) {
-      if (this.product.dimensoes && !this.product.dimensoesUnitarias) {
-        // Mapeia o objeto `dimensoes` (da API) para `dimensoesUnitarias` (do formulário)
-        // para popular os campos de dimensão no modo de edição.
-        this.product.dimensoesUnitarias = {
-          larguraCm: this.product.dimensoes.largura,
-          comprimentoCm: this.product.dimensoes.comprimento
-        };
-        this.productForm.patchValue({ dimensoesUnitarias: this.product.dimensoesUnitarias });
+      if (this.product.materiaPrima) {
+        this.materialTypes.set([this.product.materiaPrima]);
       }
     }
   }
@@ -148,11 +130,10 @@ export class ProductFormComponent implements OnInit {
     this.isSearching.set(true);
 
     try {
-      this.currentPage.set(0); // Reseta a página
+      this.currentPage.set(0);
 
-      // No modo de edição, mantém a matéria-prima atual na lista para não perdê-la de vista ao filtrar.
-      const initialMaterialTypes = (this.isEditMode && this.product.tipoMateriaPrima)
-        ? [this.product.tipoMateriaPrima]
+      const initialMaterialTypes = (this.isEditMode && this.product.materiaPrima)
+        ? [this.product.materiaPrima]
         : [];
       this.materialTypes.set(initialMaterialTypes);
 
@@ -174,7 +155,6 @@ export class ProductFormComponent implements OnInit {
 
       const newMaterials = response._embedded['tipos-materia-prima'];
 
-      // Adiciona os novos resultados, evitando duplicatas caso o item atual já esteja na lista.
       this.materialTypes.update(currentTypes => {
         const currentIds = new Set(currentTypes.map(t => t.id));
         const filteredNew = newMaterials.filter(t => !currentIds.has(t.id));
@@ -189,7 +169,6 @@ export class ProductFormComponent implements OnInit {
   }
 
   async loadMore(): Promise<void> {
-    // Previne múltiplas chamadas e só carrega mais se houver itens restantes.
     if (this.isSearching() || this.materialTypes().length >= this.totalElements()) {
       return;
     }
@@ -221,29 +200,46 @@ export class ProductFormComponent implements OnInit {
   }
 
   async onUpload(): Promise<void> {
-    if (this.selectedFile && this.product.id) {
+    let uploadUrl = this.product?._links?.['upload-foto']?.href;
+    if (this.selectedFile && uploadUrl) {
       this.isUploading.set(true);
       try {
-        // 1. Fazer o upload da imagem
-        const uploadResponse = await lastValueFrom(this.productsService.uploadImage(this.selectedFile));
-        const imageUrl = uploadResponse.fileDownloadUri;
-        const updateUrl = this.product._links['atualizar-produto']?.href;
-
-        if (!updateUrl) {
-          console.error('URL de atualização não encontrada para o produto.');
-          return;
+        if (!uploadUrl.endsWith('/')) {
+          uploadUrl += '/';
         }
-        // 2. Atualizar o produto com a URL da imagem
-        const updatedProduct = await lastValueFrom(this.productsService.updateProductPhotoUrl(updateUrl, this.product, imageUrl));
-        this.product.fotoPrincipalUrl = updatedProduct.fotoPrincipalUrl; // Atualiza a interface
-        this.selectedFile = null; // Limpa a seleção do arquivo
-        this.cdr.detectChanges(); // Notifica o Angular para atualizar a view
+        const updatedProduct = await lastValueFrom(
+          this.productsService.uploadProductPhoto(uploadUrl, this.selectedFile)
+        );
+
+        this.product = updatedProduct;
+        this.selectedFile = null;
+        this.cdr.detectChanges();
       } catch (err) {
         console.error('Falha no upload da imagem:', err);
+        // TODO: Adicionar um MatSnackBar para notificar o usuário sobre o erro.
       } finally {
         this.isUploading.set(false);
       }
     }
+  }
+
+  private getDirtyValues(form: FormGroup | FormArray): { [key: string]: any } {
+    const dirtyValues: { [key: string]: any } = {};
+    for (const key of Object.keys(form.controls)) {
+      const control = (form.controls as any)[key];
+
+      if (control.dirty) {
+        if (control instanceof FormGroup || control instanceof FormArray) {
+          const nestedDirtyValues = this.getDirtyValues(control);
+          if (Object.keys(nestedDirtyValues).length > 0) {
+            dirtyValues[key] = nestedDirtyValues;
+          }
+        } else {
+          dirtyValues[key] = control.value;
+        }
+      }
+    }
+    return dirtyValues;
   }
 
   getConsumptionUnitViewValue(value: string): string {
@@ -257,9 +253,8 @@ export class ProductFormComponent implements OnInit {
 
   async onMaterialTypeChange(event: { value: MaterialType }): Promise<void> {
     const newSelection = event.value;
-    const originalSelection = this.product.tipoMateriaPrima;
+    const originalSelection = this.product.materiaPrima;
 
-    // Só exibe o diálogo de confirmação se a matéria-prima for realmente alterada.
     if (!originalSelection || !newSelection || originalSelection.id === newSelection.id) {
       return;
     }
@@ -273,8 +268,7 @@ export class ProductFormComponent implements OnInit {
     const confirmed = await lastValueFrom(dialogRef.afterClosed());
 
     if (!confirmed) {
-      // Se o usuário cancelar, reverte a seleção no formulário para o valor original.
-      this.productForm.get('tipoMateriaPrima')?.setValue(originalSelection);
+      this.productForm.get('materiaPrima')?.setValue(originalSelection);
     }
   }
 }
@@ -283,4 +277,5 @@ export interface ProductFormData {
   product: Product;
   isEditMode: boolean;
   isCreationMode?: boolean;
+  title: string;
 }

@@ -1,11 +1,6 @@
 import { Hateoas } from '../../../core/models/hateoas.model';
 import { MaterialType } from '../../stock/models/material-type.model';
 
-export interface Dimensions {
-  largura: number;
-  comprimento: number;
-}
-
 export interface DimensionsUnitarias {
   larguraCm: number;
   comprimentoCm: number;
@@ -23,10 +18,9 @@ export interface Product extends Hateoas {
   estoqueDistribuidoTotal: number;
   estoqueDisponivelParaAlocar: number;
   estoquePorCanal: { [key: string]: number };
-  dimensoes?: Dimensions;
   fotoPrincipalUrl: string;
-  tipoMateriaPrima?: MaterialType;
-  dimensoesUnitarias: DimensionsUnitarias;
+  materiaPrima?: MaterialType;
+  dimensoes: DimensionsUnitarias;
 }
 
 export interface EmbeddedProducts {

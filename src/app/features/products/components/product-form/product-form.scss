@@ -25,7 +25,6 @@
   position: relative;
   margin-top: 8px;
   margin-bottom: 16px;
-  min-height: 100px; // Garante uma altura mínima mesmo sem imagem
   display: flex;
   align-items: center;
   justify-content: center;
@@ -45,7 +44,6 @@
     left: 0;
     right: 0;
     bottom: 0;
-    // Usa a mesma cor de "névoa" do spinner da tabela para consistência.
     background-color: rgba(var(--mat-sys-surface-rgb), 0.8);
     border-radius: 4px;
     display: flex;
@@ -97,7 +95,6 @@
   margin: 16px 0;
 }
 
-// Estilos para a tela de detalhes
 .details-content {
   .details-container {
     display: flex;
@@ -144,7 +141,7 @@
       margin-bottom: 8px;
     }
     p {
-      white-space: pre-wrap; // Mantém a formatação do texto
+      white-space: pre-wrap;
     }
   }
 
@@ -155,7 +152,6 @@
   }
 }
 
-// Aumenta a altura do campo de descrição
 textarea[formControlName="descricao"] {
   min-height: 100px;
 }

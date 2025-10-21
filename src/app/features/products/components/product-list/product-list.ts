@@ -6,6 +6,7 @@ import { MatTableModule } from '@angular/material/table';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { Product } from '../../models/products.model';
 import { MatPaginator, MatPaginatorModule, PageEvent } from '@angular/material/paginator';
+import { Sort, MatSortModule } from '@angular/material/sort';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { ProductsService } from '../../services/products';
@@ -18,7 +19,6 @@ import { ProductFormComponent, ProductFormData } from '../product-form/product-f
 import { StockService } from '../../../stock/services/stock.service';
 import { MatCardModule } from '@angular/material/card';
 
-// Constante a nível de módulo para mapear chaves de canal para nomes de exibição.
 const CHANNEL_NAME_MAP = new Map<string, string>([
   ['LOJA_FISICA', 'Loja Física'],
   ['SHOPEE', 'Shopee'],
@@ -37,6 +37,7 @@ const CHANNEL_NAME_MAP = new Map<string, string>([
     MatDialogModule,
     MatCardModule,
     MatPaginatorModule,
+    MatSortModule,
     MatProgressSpinnerModule,
     MatSnackBarModule,
   ],
@@ -44,7 +45,6 @@ const CHANNEL_NAME_MAP = new Map<string, string>([
   styleUrls: ['./product-list.scss'],
 })
 export class ProductList implements OnInit {
-  // Centraliza os textos para facilitar a manutenção e futuras traduções.
   private static readonly Texts = {
     deleteConfirmTitle: 'Confirmar Exclusão',
     deleteConfirmMessage: (name: string) => `Tem certeza que deseja excluir o produto "${name}"?`,
@@ -52,6 +52,7 @@ export class ProductList implements OnInit {
     saveSuccess: 'Produto salvo com sucesso!',
     createSuccess: 'Produto cadastrado com sucesso!',
     deleteError: 'Falha ao excluir o produto.',
+    loadError: 'Falha ao carregar a lista de produtos. Tente novamente mais tarde.',
   };
   private readonly productsService = inject(ProductsService);
   private readonly stockService = inject(StockService);
@@ -60,9 +61,8 @@ export class ProductList implements OnInit {
 
   products = signal<Product[]>([]);
   isLoading = signal(false);
-  displayedColumns: string[] = ['sku', 'nome', 'cor', 'estoque', 'estoquePorCanal', 'acoes'];
+  displayedColumns: string[] = ['sku', 'nome', 'cor', 'dimensoes', 'ativo', 'estoque', 'estoquePorCanal', 'acoes'];
 
-  // Paginação
   totalElements = signal(0);
   pageSize = signal(10);
   pageIndex = signal(0);
@@ -80,24 +80,28 @@ export class ProductList implements OnInit {
         lastValueFrom(this.productsService.getProducts(this.pageIndex(), this.pageSize())),
         lastValueFrom(this.stockService.getChannelStockMap().pipe(
           catchError(error => {
-            console.error('Erro ao buscar estoque por canal. A tabela será exibida sem esses dados.', error);
-            return of(new Map<number, { [key: string]: number }>()); // Retorna um mapa vazio em caso de erro
+            console.error('Erro ao buscar estoque por canal. A tabela será exibida sem esses dados.', error); // TODO: Adicionar notificação ao usuário
+            return of(new Map<number, { [key: string]: number }>());
           })
         ))
       ]);
 
       this.totalElements.set(productsResponse.page?.totalElements || 0);
 
-      const products = productsResponse._embedded?.produtos || [];
-      const mergedProducts = products.map(product => ({
-        ...product,
-        estoquePorCanal: channelStockMap.get(product.id) || {}
-      }));
+      const products = productsResponse?._embedded?.produtos || [];
+
+      const baseChannelStock = Object.fromEntries(Array.from(CHANNEL_NAME_MAP.keys()).map(key => [key, 0]));
+
+      const mergedProducts = products.map(product => {
+        const productChannelStock = channelStockMap.get(product.id) || {};
+        product.estoquePorCanal = { ...baseChannelStock, ...productChannelStock };
+        return product;
+      });
 
       this.products.set(mergedProducts);
     } catch (error) {
       console.error('Erro ao carregar produtos:', error);
-      this.snackBar.open('Falha ao carregar produtos.', 'Fechar', { duration: 3000 });
+      this.snackBar.open(ProductList.Texts.loadError, 'Fechar', { duration: 5000 });
     } finally {
       this.isLoading.set(false);
     }
@@ -107,6 +111,46 @@ export class ProductList implements OnInit {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
     this.loadProducts();
+  }
+
+  sortData(sort: Sort) {
+    if (!sort.active || sort.direction === '') {
+      this.loadProducts();
+      return;
+    }
+
+    const sortedData = [...this.products()].sort((a, b) => {
+      const isAsc = sort.direction === 'asc';
+      switch (sort.active) {
+        case 'sku':
+          return compare(a.sku, b.sku, isAsc);
+        case 'nome':
+          return compare(a.nome, b.nome, isAsc);
+        case 'cor':
+          return compare(a.cor, b.cor, isAsc);
+        case 'estoque':
+          return compare(a.estoqueFisicoTotal, b.estoqueFisicoTotal, isAsc);
+        case 'dimensoes':
+          {
+            const aLargura = a.dimensoes?.larguraCm ?? 0;
+            const bLargura = b.dimensoes?.larguraCm ?? 0;
+            const aComprimento = a.dimensoes?.comprimentoCm ?? 0;
+            const bComprimento = b.dimensoes?.comprimentoCm ?? 0;
+
+            const larguraCompare = compare(aLargura, bLargura, isAsc);
+            if (larguraCompare !== 0) {
+              return larguraCompare;
+            }
+            return compare(aComprimento, bComprimento, isAsc);
+          }
+        case 'ativo':
+          return compare(Number(a.ativo), Number(b.ativo), isAsc);
+        default:
+          return 0;
+      }
+    });
+
+    this.products.set(sortedData);
   }
 
   async onDelete(product: Product): Promise<void> {
@@ -126,7 +170,7 @@ export class ProductList implements OnInit {
         }
         await lastValueFrom(this.productsService.deleteProduct(deleteUrl));
         this.snackBar.open(ProductList.Texts.deleteSuccess, 'Fechar', { duration: 3000 });
-        await this.loadProducts(); // Recarrega a lista
+        await this.loadProducts();
       } catch (error) {
         console.error('Erro ao excluir produto:', error);
         this.snackBar.open(ProductList.Texts.deleteError, 'Fechar', { duration: 3000 });
@@ -135,29 +179,24 @@ export class ProductList implements OnInit {
   }
 
   onView(product: Product): void {
-    const dialogData: ProductFormData = { product, isEditMode: false };
+    const dialogData: ProductFormData = { product, isEditMode: false, title: 'Detalhes do Produto' };
     this.dialog.open(ProductFormComponent, {
       data: dialogData,
       width: '800px',
     });
   }
 
-  onEdit(product: Product): void {
-    // Cria uma cópia profunda do produto para evitar mutação direta do objeto original.
-    // Isso previne o erro ExpressionChangedAfterItHasBeenCheckedError.
-    const productCopy = JSON.parse(JSON.stringify(product));
-    const dialogData: ProductFormData = { product: productCopy, isEditMode: true };
-    const dialogRef = this.dialog.open(ProductFormComponent, {
-      data: dialogData,
-      width: '800px',
-    });
-
-    dialogRef.afterClosed().pipe(filter(result => result === true)).subscribe(() => {
-      this.snackBar.open(ProductList.Texts.saveSuccess, 'Fechar', {
-        duration: 3000,
-      });
-      this.loadProducts();
-    });
+  async onEdit(product: Product): Promise<void> {
+    try {
+      this.isLoading.set(true);
+      const fullProduct = await lastValueFrom(this.productsService.getProductById(product.id));
+      this.openProductDialog({ product: fullProduct, isEditMode: true, title: 'Editar Produto' }, ProductList.Texts.saveSuccess);
+    } catch (error) {
+      console.error('Erro ao buscar detalhes do produto para edição:', error);
+      this.snackBar.open('Não foi possível carregar os dados para edição.', 'Fechar', { duration: 3000 });
+    } finally {
+      this.isLoading.set(false);
+    }
   }
 
   onCreate(): void {
@@ -168,17 +207,25 @@ export class ProductList implements OnInit {
       cor: '',
       unidadesPorProduto: 1,
       ativo: true,
-      dimensoesUnitarias: { larguraCm: 0, comprimentoCm: 0 },
+      dimensoes: { larguraCm: 0, comprimentoCm: 0 },
     };
 
-    const dialogData: ProductFormData = { product: newProduct as Product, isEditMode: false, isCreationMode: true };
+    this.openProductDialog({
+      product: newProduct as Product,
+      isEditMode: false,
+      isCreationMode: true,
+      title: 'Cadastrar Produto'
+    }, ProductList.Texts.createSuccess);
+  }
+
+  private openProductDialog(dialogData: ProductFormData, successMessage: string): void {
     const dialogRef = this.dialog.open(ProductFormComponent, {
       data: dialogData,
       width: '800px',
     });
 
     dialogRef.afterClosed().pipe(filter(result => result === true)).subscribe(() => {
-      this.snackBar.open(ProductList.Texts.createSuccess, 'Fechar', { duration: 3000 });
+      this.snackBar.open(successMessage, 'Fechar', { duration: 3000 });
       this.loadProducts();
     });
   }
@@ -186,4 +233,8 @@ export class ProductList implements OnInit {
   getChannelDisplayName(channelKey: string): string {
     return CHANNEL_NAME_MAP.get(channelKey) || channelKey;
   }
+}
+
+function compare(a: number | string, b: number | string, isAsc: boolean) {
+  return (a < b ? -1 : 1) * (isAsc ? 1 : -1);
 }

@@ -1,12 +1,7 @@
-// 1. Importe os módulos necessários do Sass e o ponto de entrada único do Angular Material
 @use 'sass:map';
 @use '@angular/material' as mat;
 
-// Inclui os estilos essenciais (não temáticos) do Angular Material.
 @include mat.core();
-
-// --- 1. Definição das Cores da Marca ---
-// Variáveis SCSS que servem como a "fonte da verdade" para a paleta de cores.
 $color-background: #1a1a1a;
 $color-surface: #333333;
 $color-text-primary: #ffffff;
@@ -24,16 +19,11 @@ $color-success: $color-accent-green;
 $color-warning: $color-accent-yellow;
 $color-error: $color-accent-magenta;
 
-// --- 2. Geração das Variáveis CSS Globais ---
-// Expõe as cores da marca como variáveis CSS para serem usadas em toda a aplicação.
 :root {
-  // --- Cores Principais (Neutras) ---
   --color-background: #{$color-background};
   --color-surface: #{$color-surface};
   --color-text-primary: #{$color-text-primary};
   --color-text-secondary: #{$color-text-secondary};
-
-  // --- Cores de Destaque (Vibrantes) ---
   --color-accent-magenta: #{$color-accent-magenta};
   --color-accent-orange: #{$color-accent-orange};
   --color-accent-yellow: #{$color-accent-yellow};
@@ -41,20 +31,16 @@ $color-error: $color-accent-magenta;
   --color-accent-blue: #{$color-accent-blue};
   --color-accent-purple: #{$color-accent-purple};
 
-  // --- Cores Semânticas (para intenção) ---
   --color-primary-action: var(--color-accent-blue);
   --color-success: var(--color-accent-green);
   --color-warning: var(--color-accent-yellow);
   --color-error: var(--color-accent-magenta);
 }
 
-// --- 3. Definição e Aplicação do Tema do Angular Material (M3) ---
-// Cria uma paleta primária customizada que injeta a cor exata da marca no tema do Material.
 $dcriar-primary-palette: map.deep-merge(mat.$blue-palette, (500: $color-primary-action));
 
 html {
   color-scheme: light;
-  // Gera todas as variáveis CSS do tema do Material 3 (ex: --mat-sys-primary).
   @include mat.theme((
     color: (
       primary: $dcriar-primary-palette,
@@ -69,14 +55,11 @@ html {
   ));
 }
 
-// --- 4. Estilos Globais e Utilitários ---
 html, body {
   height: 100%;
 }
 
 body {
-  // Usa as variáveis do tema do Material para garantir que o fundo e o texto da página
-  // sejam compatíveis com os componentes (cards, dialogs, etc.).
   background-color: var(--mat-sys-background);
   color: var(--mat-sys-on-background);
   font-family: 'Roboto', sans-serif;
@@ -84,7 +67,6 @@ body {
   padding: 0;
 }
 
-// Classes de utilitários para aplicar cores de texto e fundo rapidamente.
 $accent-colors: (
   "magenta": var(--color-accent-magenta),
   "orange": var(--color-accent-orange),
@@ -103,7 +85,6 @@ $accent-colors: (
   }
 }
 
-// Efeito de hover global para botões, melhorando o feedback visual.
 .mdc-button:hover,
 a[mat-button]:hover,
 a[mat-flat-button]:hover,
