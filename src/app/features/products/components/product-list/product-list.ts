@@ -87,6 +87,7 @@ export class ProductList implements OnInit {
             'Erro ao buscar estoque por canal. A tabela será exibida sem esses dados.',
             error
           );
+          // Em caso de erro, continua com um mapa vazio para não quebrar a UI.
           return of(new Map<number, { [key: string]: number }>());
         })
       )
@@ -107,9 +108,9 @@ export class ProductList implements OnInit {
   async loadProducts(): Promise<void> {
     this.isLoading.set(true);
     try {
+      console.log('[ProductList] loadProducts: Carregando com ordenação:', { active: this.sortActive(), direction: this.sortDirection() });
       const sortString = `${this.sortActive()},${this.sortDirection()}`;
       const productsResponse = await lastValueFrom(
-        this.productsService.getProducts(this.pageIndex(), this.pageSize())
         this.productsService.getProducts(this.pageIndex(), this.pageSize(), sortString)
       );
 
@@ -117,8 +118,7 @@ export class ProductList implements OnInit {
       const products = productsResponse?._embedded?.produtos || [];
       const baseChannelStock = Object.fromEntries(Array.from(CHANNEL_NAME_MAP.keys()).map(key => [key, 0]));
 
-      const mergedProducts = products.map(product => {
-      const mergedProducts = products.map((product) => {
+      const mergedProducts = products.map((product: Product) => {
         const productChannelStock = this.channelStockMap.get(product.id) || {};
         product.estoquePorCanal = { ...baseChannelStock, ...productChannelStock };
         return product;
@@ -140,53 +140,18 @@ export class ProductList implements OnInit {
   }
 
   sortData(sort: Sort) {
-    if (!sort.active || sort.direction === '') {
+    console.log('[ProductList] sortData: Evento de ordenação recebido:', sort);
     // Se a direção da ordenação for vazia, volta para o padrão (nome, asc)
     this.sortActive.set(sort.direction ? sort.active : 'nome');
     this.sortDirection.set(sort.direction || 'asc');
 
-    // Se o paginador existir e a ordenação não for por nome (padrão),
-    // volta para a primeira página para evitar confusão.
+    // Ao mudar a ordenação, sempre volte para a primeira página.
     if (this.paginator && this.paginator.pageIndex !== 0) {
       this.paginator.firstPage();
     } else {
       // Se já estiver na primeira página, apenas carrega os produtos com a nova ordenação.
       this.loadProducts();
-      return;
     }
-
-    const sortedData = [...this.products()].sort((a, b) => {
-      const isAsc = sort.direction === 'asc';
-      switch (sort.active) {
-        case 'sku':
-          return compare(a.sku, b.sku, isAsc);
-        case 'nome':
-          return compare(a.nome, b.nome, isAsc);
-        case 'cor':
-          return compare(a.cor, b.cor, isAsc);
-        case 'estoque':
-          return compare(a.estoqueFisicoTotal, b.estoqueFisicoTotal, isAsc);
-        case 'dimensoes':
-          {
-            const aLargura = a.dimensoes?.larguraCm ?? 0;
-            const bLargura = b.dimensoes?.larguraCm ?? 0;
-            const aComprimento = a.dimensoes?.comprimentoCm ?? 0;
-            const bComprimento = b.dimensoes?.comprimentoCm ?? 0;
-
-            const larguraCompare = compare(aLargura, bLargura, isAsc);
-            if (larguraCompare !== 0) {
-              return larguraCompare;
-            }
-            return compare(aComprimento, bComprimento, isAsc);
-          }
-        case 'ativo':
-          return compare(Number(a.ativo), Number(b.ativo), isAsc);
-        default:
-          return 0;
-      }
-    });
-
-    this.products.set(sortedData);
   }
 
   async onDelete(product: Product): Promise<void> {
@@ -254,14 +219,6 @@ export class ProductList implements OnInit {
 
       // Busca o "molde" do produto do backend.
       const newProductTemplate = await lastValueFrom(this.productsService.getNewProductTemplate());
-
-      // O template de novo produto não tem o link de busca. Vamos construí-lo.
-      // 1. Pegamos o link da coleção de produtos.
-      const searchUrl = this.apiRoot.endpoints()?._links?.['tipos-materia-prima']?.href?.split('{')[0];
-      if (searchUrl) {
-        // 2. Adicionamos o link de busca que o backend espera.
-        newProductTemplate._links['tipos-materia-prima'] = { href: searchUrl };
-      }
 
       this.openProductDialog({
         product: newProductTemplate,

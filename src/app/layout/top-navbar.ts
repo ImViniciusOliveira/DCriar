@@ -43,7 +43,13 @@ export class TopNavbar {
     return Object.keys(endpoints._links)
       .map((key) => this.navLinksMap[key])
       .filter(
-        (navLink) => navLink && !endpoints._links[navLink.path]?.templated
+        (navLink) => {
+          if (!navLink) return false;
+          // Permite o link 'produtos' mesmo que seja templado, pois a rota base funciona.
+          if (navLink.path === 'produtos') return true;
+          // Para os outros links, mantém a lógica original de não mostrar se for templado.
+          return !endpoints._links[navLink.path]?.templated;
+        }
       );
   }
 }

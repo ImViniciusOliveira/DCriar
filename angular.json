@@ -66,7 +66,7 @@
               "buildTarget": "dcriar:build:production"
             },
             "development": {
-              "buildTarget": "dcriar:build:development",
+              "buildTarget": "dcriar:build:development"
             }
           },
           "defaultConfiguration": "development"

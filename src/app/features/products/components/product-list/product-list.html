@@ -33,7 +33,7 @@
 
           <!-- Coluna Estoque -->
           <ng-container matColumnDef="estoque">
-            <th mat-header-cell *matHeaderCellDef mat-sort-header="estoque">Estoque Total</th>
+            <th mat-header-cell *matHeaderCellDef mat-sort-header="estoqueFisicoTotal">Estoque Total</th>
             <td mat-cell *matCellDef="let product">
               {{ product.estoqueFisicoTotal }} pacotes
               <br />
@@ -49,7 +49,7 @@
 
           <!-- Coluna Dimensões -->
           <ng-container matColumnDef="dimensoes">
-            <th mat-header-cell *matHeaderCellDef mat-sort-header="dimensoes">Dimensões</th>
+            <th mat-header-cell *matHeaderCellDef mat-sort-header="dimensoes.larguraCm">Dimensões</th>
             <td mat-cell *matCellDef="let product">{{ product.dimensoes?.larguraCm }} x {{ product.dimensoes?.comprimentoCm }} cm</td>
           </ng-container>
 

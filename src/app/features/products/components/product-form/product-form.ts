@@ -67,8 +67,14 @@ export class ProductFormComponent implements OnInit {
     this.product = data.product;
     this.isEditMode = !!data.isEditMode;
 
-    // Lógica HATEOAS simplificada: O componente agora confia que o link virá no objeto do produto.
-    this.materialTypesSearchUrl = this.product?._links?.['tipos-materia-prima']?.href?.split('{')[0] ?? null;
+    // Lógica HATEOAS Robusta:
+    // 1. Tenta obter o link do objeto do produto (cenário de edição/visualização).
+    let searchUrl: string | undefined = this.product?._links?.['tipos-materia-prima']?.href?.split('{')[0];
+    // 2. Se não encontrar, busca o link na raiz da API (cenário de criação ou fallback).
+    if (!searchUrl) {
+      searchUrl = this.apiRoot.endpoints()?._links?.['tipos-materia-prima']?.href?.split('{')[0];
+    }
+    this.materialTypesSearchUrl = searchUrl ?? null;
 
     if (!this.materialTypesSearchUrl) {
       console.error("URL para busca de matéria-prima não pôde ser determinada.");
