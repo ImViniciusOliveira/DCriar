@@ -29,7 +29,7 @@
           </mat-form-field>
         </div>
 
-        <div class="image-upload-section">
+        @if (isEditMode) {<div class="image-upload-section">
           <label class="mat-body-2" for="fotoPrincipal">Foto Principal</label>
           <div class="image-preview-container">
             @if (product.fotoPrincipalUrl) {
@@ -52,7 +52,7 @@
               Enviar Imagem
             </button>
           </div>
-        </div>
+        </div>}
 
         <mat-checkbox formControlName="ativo" class="form-checkbox">Ativo</mat-checkbox>
 

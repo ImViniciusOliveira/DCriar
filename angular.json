@@ -67,7 +67,6 @@
             },
             "development": {
               "buildTarget": "dcriar:build:development",
-              "proxyConfig": "proxy.conf.json"
             }
           },
           "defaultConfiguration": "development"

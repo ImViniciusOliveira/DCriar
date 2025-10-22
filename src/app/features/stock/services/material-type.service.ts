@@ -10,12 +10,12 @@ export class MaterialTypeService {
   private readonly http = inject(HttpClient);
 
   searchMaterialTypes(
-    searchUrl: string,
+    baseUrl: string,
     filters: { nome?: string; unidadeDeConsumo?: string },
     page = 0,
     size = 20
   ): Observable<PagedMaterialTypesResponse> {
-    if (!searchUrl) {
+    if (!baseUrl) {
       return throwError(() => new Error('URL de busca de matérias-primas não fornecida.'));
     }
 
@@ -24,13 +24,13 @@ export class MaterialTypeService {
       .set('size', size.toString())
       .set('sort', 'nome,ASC');
 
-    if (filters.nome) {
+    if (filters.nome?.trim()) {
       params = params.set('nome', filters.nome);
     }
-    if (filters.unidadeDeConsumo) {
+    if (filters.unidadeDeConsumo?.trim()) {
       params = params.set('unidadeDeConsumo', filters.unidadeDeConsumo);
     }
 
-    return this.http.get<PagedMaterialTypesResponse>(searchUrl, { params });
+    return this.http.get<PagedMaterialTypesResponse>(baseUrl, { params });
   }
 }

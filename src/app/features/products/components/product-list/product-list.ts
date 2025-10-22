@@ -18,6 +18,7 @@ import { filter, catchError, of, lastValueFrom } from 'rxjs';
 import { ProductFormComponent, ProductFormData } from '../product-form/product-form';
 import { StockService } from '../../../stock/services/stock.service';
 import { MatCardModule } from '@angular/material/card';
+import { ApiRoot } from '../../../../core/services/api-root';
 
 const CHANNEL_NAME_MAP = new Map<string, string>([
   ['LOJA_FISICA', 'Loja Física'],
@@ -58,6 +59,7 @@ export class ProductList implements OnInit {
   private readonly stockService = inject(StockService);
   private readonly dialog = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
+  private readonly apiRoot = inject(ApiRoot);
 
   products = signal<Product[]>([]);
   isLoading = signal(false);
@@ -67,33 +69,57 @@ export class ProductList implements OnInit {
   pageSize = signal(10);
   pageIndex = signal(0);
 
+  // Controla a ordenação
+  sortActive = signal('nome');
+  sortDirection = signal<Sort['direction']>('asc');
+
+  private channelStockMap = new Map<number, { [key: string]: number }>();
+
   @ViewChild(MatPaginator) paginator!: MatPaginator;
 
   ngOnInit(): void {
-    this.loadProducts();
+    this.isLoading.set(true);
+    // 1. Busca o mapa de estoque APENAS UMA VEZ.
+    lastValueFrom(
+      this.stockService.getChannelStockMap().pipe(
+        catchError((error) => {
+          console.error(
+            'Erro ao buscar estoque por canal. A tabela será exibida sem esses dados.',
+            error
+          );
+          return of(new Map<number, { [key: string]: number }>());
+        })
+      )
+    )
+      .then((stockMap) => {
+        this.channelStockMap = stockMap;
+        // 2. Carrega a primeira página de produtos.
+        return this.loadProducts();
+      })
+      .catch((error) => {
+        console.error('Erro na inicialização da lista de produtos:', error);
+        this.snackBar.open(ProductList.Texts.loadError, 'Fechar', {
+          duration: 5000,
+        });
+      });
   }
 
   async loadProducts(): Promise<void> {
     this.isLoading.set(true);
     try {
-      const [productsResponse, channelStockMap] = await Promise.all([
-        lastValueFrom(this.productsService.getProducts(this.pageIndex(), this.pageSize())),
-        lastValueFrom(this.stockService.getChannelStockMap().pipe(
-          catchError(error => {
-            console.error('Erro ao buscar estoque por canal. A tabela será exibida sem esses dados.', error); // TODO: Adicionar notificação ao usuário
-            return of(new Map<number, { [key: string]: number }>());
-          })
-        ))
-      ]);
+      const sortString = `${this.sortActive()},${this.sortDirection()}`;
+      const productsResponse = await lastValueFrom(
+        this.productsService.getProducts(this.pageIndex(), this.pageSize())
+        this.productsService.getProducts(this.pageIndex(), this.pageSize(), sortString)
+      );
 
       this.totalElements.set(productsResponse.page?.totalElements || 0);
-
       const products = productsResponse?._embedded?.produtos || [];
-
       const baseChannelStock = Object.fromEntries(Array.from(CHANNEL_NAME_MAP.keys()).map(key => [key, 0]));
 
       const mergedProducts = products.map(product => {
-        const productChannelStock = channelStockMap.get(product.id) || {};
+      const mergedProducts = products.map((product) => {
+        const productChannelStock = this.channelStockMap.get(product.id) || {};
         product.estoquePorCanal = { ...baseChannelStock, ...productChannelStock };
         return product;
       });
@@ -115,6 +141,16 @@ export class ProductList implements OnInit {
 
   sortData(sort: Sort) {
     if (!sort.active || sort.direction === '') {
+    // Se a direção da ordenação for vazia, volta para o padrão (nome, asc)
+    this.sortActive.set(sort.direction ? sort.active : 'nome');
+    this.sortDirection.set(sort.direction || 'asc');
+
+    // Se o paginador existir e a ordenação não for por nome (padrão),
+    // volta para a primeira página para evitar confusão.
+    if (this.paginator && this.paginator.pageIndex !== 0) {
+      this.paginator.firstPage();
+    } else {
+      // Se já estiver na primeira página, apenas carrega os produtos com a nova ordenação.
       this.loadProducts();
       return;
     }
@@ -178,17 +214,28 @@ export class ProductList implements OnInit {
     }
   }
 
-  onView(product: Product): void {
-    const dialogData: ProductFormData = { product, isEditMode: false, title: 'Detalhes do Produto' };
-    this.dialog.open(ProductFormComponent, {
-      data: dialogData,
-      width: '800px',
-    });
+  async onView(product: Product): Promise<void> {
+    try {
+      this.isLoading.set(true);
+      // Busca o produto completo para garantir que todos os links HATEOAS estão presentes.
+      const fullProduct = await lastValueFrom(this.productsService.getProductById(product.id));
+      const dialogData: ProductFormData = { product: fullProduct, isEditMode: false, title: 'Detalhes do Produto' };
+      this.dialog.open(ProductFormComponent, {
+        data: dialogData,
+        width: '800px',
+      });
+    } catch (error) {
+      console.error('Erro ao buscar detalhes do produto para visualização:', error);
+      this.snackBar.open('Não foi possível carregar os dados para visualização.', 'Fechar', { duration: 3000 });
+    } finally {
+      this.isLoading.set(false);
+    }
   }
 
   async onEdit(product: Product): Promise<void> {
     try {
       this.isLoading.set(true);
+      // Busca o produto completo para garantir que todos os links HATEOAS estão presentes.
       const fullProduct = await lastValueFrom(this.productsService.getProductById(product.id));
       this.openProductDialog({ product: fullProduct, isEditMode: true, title: 'Editar Produto' }, ProductList.Texts.saveSuccess);
     } catch (error) {
@@ -199,23 +246,35 @@ export class ProductList implements OnInit {
     }
   }
 
-  onCreate(): void {
-    const newProduct: Partial<Product> = {
-      nome: '',
-      sku: '',
-      descricao: '',
-      cor: '',
-      unidadesPorProduto: 1,
-      ativo: true,
-      dimensoes: { larguraCm: 0, comprimentoCm: 0 },
-    };
+  async onCreate(): Promise<void> {
+    try {
+      this.isLoading.set(true);
+      // Garante que a API raiz foi carregada para termos acesso aos links principais.
+      await lastValueFrom(this.apiRoot.endpoints$);
 
-    this.openProductDialog({
-      product: newProduct as Product,
-      isEditMode: false,
-      isCreationMode: true,
-      title: 'Cadastrar Produto'
-    }, ProductList.Texts.createSuccess);
+      // Busca o "molde" do produto do backend.
+      const newProductTemplate = await lastValueFrom(this.productsService.getNewProductTemplate());
+
+      // O template de novo produto não tem o link de busca. Vamos construí-lo.
+      // 1. Pegamos o link da coleção de produtos.
+      const searchUrl = this.apiRoot.endpoints()?._links?.['tipos-materia-prima']?.href?.split('{')[0];
+      if (searchUrl) {
+        // 2. Adicionamos o link de busca que o backend espera.
+        newProductTemplate._links['tipos-materia-prima'] = { href: searchUrl };
+      }
+
+      this.openProductDialog({
+        product: newProductTemplate,
+        isEditMode: false,
+        isCreationMode: true,
+        title: 'Cadastrar Produto'
+      }, ProductList.Texts.createSuccess);
+    } catch (error) {
+      console.error('Erro ao buscar template para novo produto:', error);
+      this.snackBar.open('Não foi possível iniciar o cadastro de um novo produto.', 'Fechar', { duration: 3000 });
+    } finally {
+      this.isLoading.set(false);
+    }
   }
 
   private openProductDialog(dialogData: ProductFormData, successMessage: string): void {

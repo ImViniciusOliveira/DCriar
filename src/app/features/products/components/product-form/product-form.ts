@@ -16,6 +16,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { ConfirmDialog, ConfirmDialogData } from '../../../../shared/components/confirm-dialog/confirm-dialog/confirm-dialog';
 import { lastValueFrom } from 'rxjs';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { ApiRoot } from '../../../../core/services/api-root';
 
 const CONSUMPTION_UNITS = [
   { value: 'CENTIMETRO_QUADRADO', viewValue: 'Centímetro Quadrado' },
@@ -43,6 +44,7 @@ export class ProductFormComponent implements OnInit {
   private readonly materialTypeService = inject(MaterialTypeService);
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly dialog = inject(MatDialog);
+  private readonly apiRoot = inject(ApiRoot);
 
   searchForm: FormGroup;
   materialTypes: WritableSignal<MaterialType[]> = signal([]);
@@ -60,14 +62,16 @@ export class ProductFormComponent implements OnInit {
   constructor(
     public dialogRef: MatDialogRef<ProductFormComponent>,
     @Inject(MAT_DIALOG_DATA) public data: ProductFormData,
-    private readonly fb: FormBuilder
+    private readonly fb: FormBuilder,
   ) {
     this.product = data.product;
     this.isEditMode = !!data.isEditMode;
 
-    const searchUrl = this.product?._links?.['buscar-tipos-materia-prima']?.href;
-    if (searchUrl) {
-      this.materialTypesSearchUrl = searchUrl.split('{')[0];
+    // Lógica HATEOAS simplificada: O componente agora confia que o link virá no objeto do produto.
+    this.materialTypesSearchUrl = this.product?._links?.['tipos-materia-prima']?.href?.split('{')[0] ?? null;
+
+    if (!this.materialTypesSearchUrl) {
+      console.error("URL para busca de matéria-prima não pôde ser determinada.");
     }
 
     this.productForm = this.fb.group({
@@ -88,6 +92,10 @@ export class ProductFormComponent implements OnInit {
       searchName: [''],
       searchUnit: ['']
     });
+
+    if (!this.materialTypesSearchUrl) {
+      this.productForm.disable();
+    }
   }
 
   async onSubmit(): Promise<void> {
@@ -105,11 +113,19 @@ export class ProductFormComponent implements OnInit {
         }
         this.product = await lastValueFrom(this.productsService.patchProduct(this.product.id, dirtyValues));
       } else { // Modo de Criação
-        const formValue = { ...this.productForm.value };
-        if (formValue.materiaPrima?.id) {
-          formValue.materiaPrima = { id: formValue.materiaPrima.id };
-        }
-        await lastValueFrom(this.productsService.createProduct(formValue));
+        const formValue = this.productForm.getRawValue();
+
+        // Monta o payload para a API de criação, traduzindo os nomes dos campos.
+        const creationPayload = {
+          ...formValue,
+          tipoMateriaPrimaId: formValue.materiaPrima?.id,
+          dimensoesUnitarias: formValue.dimensoes,
+          materiaPrima: undefined, // Garante que o objeto materiaPrima não será enviado
+          dimensoes: undefined,    // Garante que o objeto dimensoes não será enviado
+        };
+
+        // O serviço espera um Partial<Product>, então garantimos a compatibilidade.
+        await lastValueFrom(this.productsService.createProduct(creationPayload as Partial<Product>));
       }
 
       this.dialogRef.close(true);
@@ -123,6 +139,8 @@ export class ProductFormComponent implements OnInit {
       if (this.product.materiaPrima) {
         this.materialTypes.set([this.product.materiaPrima]);
       }
+    } else { // Modo de criação
+      this.performSearch();
     }
   }
 
@@ -204,9 +222,6 @@ export class ProductFormComponent implements OnInit {
     if (this.selectedFile && uploadUrl) {
       this.isUploading.set(true);
       try {
-        if (!uploadUrl.endsWith('/')) {
-          uploadUrl += '/';
-        }
         const updatedProduct = await lastValueFrom(
           this.productsService.uploadProductPhoto(uploadUrl, this.selectedFile)
         );

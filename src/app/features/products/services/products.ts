@@ -27,8 +27,8 @@ export class ProductsService {
       switchMap((url) =>
         this.fetchProducts(url, page, size).pipe(
           map(response => this.transformProductResponse(response, size)),
-          catchError((err) => {
-            console.error(`Falha ao buscar produtos na página ${page}, tamanho ${size}`, err); // TODO: Adicionar notificação ao usuário
+          catchError(err => {
+            console.error(`Falha ao buscar produtos na página ${page}, tamanho ${size}`, err);
             return of({ _embedded: { produtos: [] }, _links: {}, page: { size: 0, totalElements: 0, totalPages: 0, number: 0 } } as ApiResponseProducts);
           })
         )
@@ -37,17 +37,29 @@ export class ProductsService {
     );
   }
 
+  getNewProductTemplate(): Observable<Product> {
+    return this.endpoints$.pipe(
+      map(endpoints => {
+        const url = endpoints?._links?.['novo-produto']?.href;
+        if (!url) throw new Error('URL para template de novo produto não encontrada na API.');
+        return url;
+      }),
+      switchMap(baseUrl => this.http.get<Product>(`${baseUrl}/new`)),
+      take(1)
+    );
+  }
+
   getProductById(id: number): Observable<Product> {
     return this.endpoints$.pipe(
       map(endpoints => this.getProductUrl(endpoints)),
-      switchMap(baseUrl => this.http.get<any>(`${baseUrl}/${id}`)),
+      switchMap(baseUrl => this.http.get<Product>(`${baseUrl}/${id}`)),
       take(1)
     );
   }
 
   private fetchProducts(url: string, page: number, size: number): Observable<ApiResponseProducts> {
-    const fullUrl = url.replace('{?page,size,sort}', `?page=${page}&size=${size}&sort=nome,ASC`); // TODO: Implementar ordenação dinâmica
-    return this.http.get<ApiResponseProducts>(fullUrl);
+    const fullUrl = url.replace('{?page,size,sort}', `?page=${page}&size=${size}&sort=nome,ASC`);
+    return this.http.get<ApiResponseProducts>(fullUrl); // TODO: Implementar ordenação dinâmica
   }
 
   deleteProduct(url: string): Observable<void> {
@@ -64,7 +76,7 @@ export class ProductsService {
     return this.endpoints$.pipe(
       map(endpoints => this.getProductUrl(endpoints)),
       switchMap(url => this.http.post<Product>(url, product)),
-      tap(() => this.refresh$.next())
+      tap(() => this.refresh$.next()) // O tap aqui retorna o que o switchMap emitiu, que é o Produto.
     );
   }
 
@@ -96,16 +108,11 @@ export class ProductsService {
   }
 
   private transformProductResponse(response: any, size: number): ApiResponseProducts {
-    const produtos = (response.produtos || []);
-
     return {
-      _embedded: { produtos },
+      ...response,
       _links: response._links || {},
       page: {
-        size: size,
-        totalElements: response.total || 0,
-        totalPages: Math.ceil((response.total || 0) / size),
-        number: response.pagina > 0 ? response.pagina - 1 : 0,
+        ...response.page,
       },
     };
   }
