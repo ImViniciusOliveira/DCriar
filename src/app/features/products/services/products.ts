@@ -84,6 +84,9 @@ export class ProductsService {
     if (!product.id) {
       delete product.id;
     }
+
+    console.log('[ProductsService] Payload do PATCH:', product);
+
     return this.endpoints$.pipe(
       map(endpoints => this.getProductUrl(endpoints).split('{')[0]),
       switchMap(baseUrl => this.http.patch<Product>(`${baseUrl}/${productId}`, product)),
@@ -150,6 +153,12 @@ export class ProductsService {
     if (payload.materiaPrima) {
       payload.tipoMateriaPrimaId = payload.materiaPrima.id;
       delete payload.materiaPrima;
+    }
+
+    // Renomeia 'dimensoes' para 'dimensoesUnitarias' que é o esperado pela API na criação.
+    if (payload.dimensoes) {
+      payload.dimensoesUnitarias = payload.dimensoes;
+      delete payload.dimensoes;
     }
 
     return payload;

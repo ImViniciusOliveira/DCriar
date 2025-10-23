@@ -16,6 +16,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { ConfirmDialog, ConfirmDialogData } from '../../../../shared/components/confirm-dialog/confirm-dialog/confirm-dialog';
 import { lastValueFrom } from 'rxjs';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { NgxMaskDirective, provideNgxMask } from 'ngx-mask';
 import { ApiRoot } from '../../../../core/services/api-root';
 
 const CONSUMPTION_UNITS = [
@@ -27,7 +28,8 @@ const CONSUMPTION_UNITS = [
 @Component({
   selector: 'app-product-form',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, MatDialogModule, MatFormFieldModule, MatSelectModule, MatInputModule, MatButtonModule, MatCheckboxModule, MatIconModule, InfiniteScrollDirective, MatProgressSpinnerModule],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, MatDialogModule, MatFormFieldModule, MatSelectModule, MatInputModule, MatButtonModule, MatCheckboxModule, MatIconModule, InfiniteScrollDirective, MatProgressSpinnerModule, NgxMaskDirective],
+  providers: [provideNgxMask()],
   templateUrl: './product-form.html',
   styleUrls: ['./product-form.scss']
 })
@@ -116,7 +118,6 @@ export class ProductFormComponent implements OnInit {
       }
 
       const dirtyValues = this.getDirtyValues(this.productForm);
-      let hasSaved = false;
 
       if (this.isEditMode) {
         if (!this.product?.id) {
@@ -125,6 +126,7 @@ export class ProductFormComponent implements OnInit {
         }
         // Só envia o patch se houver de fato alguma alteração no formulário.
         if (Object.keys(dirtyValues).length > 0) {
+          console.log('[ProductForm] Enviando para PATCH:', dirtyValues);
           this.product = await lastValueFrom(this.productsService.patchProduct(this.product.id, dirtyValues));
         }
       } else { // Modo de Criação
@@ -136,8 +138,9 @@ export class ProductFormComponent implements OnInit {
       // Fecha o diálogo se a operação foi bem-sucedida.
       this.dialogRef.close(true);
     } catch (error) {
-      console.error(this.isEditMode ? 'Erro ao atualizar o produto:' : 'Erro ao criar o produto:', error);
+      console.error(this.isEditMode ? 'Erro ao atualizar o produto:' : 'Erro ao criar o produto:', error instanceof Error ? error.message : error);
       // TODO: Adicionar um MatSnackBar para notificar o usuário sobre o erro.
+      // Não fechamos o diálogo em caso de erro para que o usuário possa tentar novamente.
     }
   }
 
@@ -257,16 +260,29 @@ export class ProductFormComponent implements OnInit {
     for (const key of Object.keys(form.controls)) {
       const control = (form.controls as any)[key];
 
-      if (control.dirty) {
-        if (control instanceof FormGroup || control instanceof FormArray) {
-          const nestedDirtyValues = this.getDirtyValues(control);
-          if (Object.keys(nestedDirtyValues).length > 0) {
-            dirtyValues[key] = nestedDirtyValues;
-          }
-        } else {
-          dirtyValues[key] = control.value;
-        }
+      // Skip controls that were not modified to reduce nesting
+      if (!control.dirty) {
+        continue;
       }
+
+      // Handle composite controls (groups/arrays)
+      if (control instanceof FormGroup || control instanceof FormArray) {
+        const nestedDirtyValues = this.getDirtyValues(control);
+        if (Object.keys(nestedDirtyValues).length === 0) {
+          continue;
+        }
+
+        // Special case for 'dimensoes': if any child changed, send the whole object
+        if (key === 'dimensoes') {
+          dirtyValues[key] = control.value;
+        } else {
+          dirtyValues[key] = nestedDirtyValues;
+        }
+        continue;
+      }
+
+      // Simple control: include its value
+      dirtyValues[key] = control.value;
     }
     return dirtyValues;
   }

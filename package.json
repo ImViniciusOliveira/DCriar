@@ -30,6 +30,7 @@
     "@angular/material": "^20.2.8",
     "@angular/platform-browser": "^20.3.4",
     "@angular/router": "^20.3.4",
+    "ngx-mask": "^20.0.3",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },
