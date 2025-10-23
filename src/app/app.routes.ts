@@ -21,11 +21,11 @@ export const routes: Routes = [
     component: ProductList,
   },
   {
-    path: 'sales',
+    path: 'vendas',
     component: SalesList,
   },
   {
-    path: 'ordens-de-producao',
+    path: 'ordens-de-corte',
     component: CutOrderForm,
   },
   {

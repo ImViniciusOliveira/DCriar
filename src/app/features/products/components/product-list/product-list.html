@@ -18,7 +18,7 @@
         </div>
       }
       <div class="mat-elevation-z8 table-container">
-        <table mat-table [dataSource]="products()" matSort (matSortChange)="sortData($event)">
+        <table mat-table [dataSource]="products()" matSort (matSortChange)="sortData($event)" [trackBy]="trackByProductId">
           <!-- Coluna SKU -->
           <ng-container matColumnDef="sku">
             <th mat-header-cell *matHeaderCellDef mat-sort-header="sku">SKU</th>

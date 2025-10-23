@@ -5,7 +5,8 @@ import { toObservable } from '@angular/core/rxjs-interop';
 
 import { ApiRoot } from '../../../core/services/api-root';
 import { Hateoas } from '../../../core/models/hateoas.model';
-import { ApiResponseProducts , Product } from '../models/products.model';
+import { ApiResponseProducts, Product } from '../models/products.model';
+import { Channel, ProductChannelStock } from '../../stock/models/channel-stock.model';
 
 @Injectable({
   providedIn: 'root',
@@ -68,12 +69,13 @@ export class ProductsService {
   }
 
   createProduct(product: Partial<Product>): Observable<Product> {
+    const payload = this.mapToPayload(product);
     return this.endpoints$.pipe(
       take(1),
       map(endpoints => {
         return this.getProductUrl(endpoints).split('{')[0]; // Remove o template da URL
       }),
-      switchMap(url => this.http.post<Product>(url, product)),
+      switchMap(url => this.http.post<Product>(url, payload)),
       tap(() => this.refresh$.next()) // O tap aqui retorna o que o switchMap emitiu, que é o Produto.
     );
   }
@@ -97,9 +99,28 @@ export class ProductsService {
       .pipe(tap(() => this.refresh$.next()));
   }
 
+  /**
+   * Busca o estoque por canal para um produto específico usando seu link HATEOAS.
+   * Transforma a resposta da API em um mapa simples de [channelName]: quantity.
+   */
+  getChannelStock(product: Product): Observable<{ [key: string]: number }> {
+    const stockUrl = product._links?.['estoque-por-canal']?.href;
+    if (!stockUrl) {
+      return of({});
+    }
+    return this.http.get<ProductChannelStock>(stockUrl).pipe(
+      map(response => {
+        if (!response || !Array.isArray(response.canais)) {
+          return {};
+        }
+        return this.createChannelMap(response.canais);
+      })
+    );
+  }
+
   private getProductUrl(endpoints: Hateoas): string {
-    // Prioriza o link paginado, mas usa o link simples como fallback.
-    const url = endpoints?._links?.['produtos-paged']?.href || endpoints?._links?.['produtos']?.href;
+    // Confia 100% no HATEOAS para o link paginado.
+    const url = endpoints?._links?.['produtos-paged']?.href;
     if (!url) {
       throw new Error('URL de produtos não encontrada na resposta da API');
     }
@@ -114,5 +135,30 @@ export class ProductsService {
         ...response.page,
       },
     };
+  }
+
+  /**
+   * Mapeia um objeto de produto (geralmente vindo de um formulário) para o formato
+   * de payload que a API espera.
+   * - Remove campos que não devem ser enviados (como _links).
+   * - Transforma campos complexos em IDs (ex: materiaPrima -> tipoMateriaPrimaId).
+   */
+  private mapToPayload(product: Partial<Product>): any {
+    const payload: any = { ...product };
+
+    // Se houver matéria-prima, envie apenas o ID.
+    if (payload.materiaPrima) {
+      payload.tipoMateriaPrimaId = payload.materiaPrima.id;
+      delete payload.materiaPrima;
+    }
+
+    return payload;
+  }
+
+  private createChannelMap(channels: Channel[]): { [key: string]: number } {
+    return channels.reduce((acc, channel) => {
+      acc[channel.canalNome] = channel.quantidade;
+      return acc;
+    }, {} as { [key: string]: number });
   }
 }

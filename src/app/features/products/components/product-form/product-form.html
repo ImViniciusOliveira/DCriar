@@ -32,8 +32,8 @@
         @if (isEditMode) {<div class="image-upload-section">
           <label class="mat-body-2" for="fotoPrincipal">Foto Principal</label>
           <div class="image-preview-container">
-            @if (product.fotoPrincipalUrl) {
-              <img [src]="product.fotoPrincipalUrl" alt="Foto do produto {{product.nome}}">
+            @if (previewUrl() || product.fotoPrincipalUrl) {
+              <img [src]="previewUrl() || product.fotoPrincipalUrl" alt="Foto do produto {{product.nome}}">
             }
             @if (isUploading()) {
               <div class="upload-overlay">
@@ -41,17 +41,11 @@
               </div>
             }
           </div>
-          <div class="image-upload">
-            <input id="fotoPrincipal" type="file" (change)="onFileSelected($event)" accept="image/png, image/jpeg" #fileInput>
-            <button mat-stroked-button type="button" (click)="fileInput.click()">
-              <mat-icon>attach_file</mat-icon>
-              Selecionar Arquivo
-            </button>
-            <button mat-flat-button color="primary" type="button" (click)="onUpload()" [disabled]="!selectedFile || isUploading()">
-              <mat-icon>upload</mat-icon>
-              Enviar Imagem
-            </button>
-          </div>
+          <input type="file" id="fotoPrincipal" (change)="onFileSelected($event)" accept="image/png, image/jpeg" hidden #fileInput>
+          <button mat-stroked-button type="button" (click)="fileInput.click()">
+            <mat-icon>attach_file</mat-icon>
+            Selecionar Arquivo
+          </button>
         </div>}
 
         <mat-checkbox formControlName="ativo" class="form-checkbox">Ativo</mat-checkbox>

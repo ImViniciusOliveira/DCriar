@@ -49,6 +49,7 @@ export class ProductFormComponent implements OnInit {
   searchForm: FormGroup;
   materialTypes: WritableSignal<MaterialType[]> = signal([]);
   selectedFile: File | null = null;
+  previewUrl = signal<string | null>(null);
   isSearching = signal(false);
   isUploading = signal(false);
 
@@ -67,17 +68,16 @@ export class ProductFormComponent implements OnInit {
     this.product = data.product;
     this.isEditMode = !!data.isEditMode;
 
-    // Lógica HATEOAS Robusta:
-    // 1. Tenta obter o link do objeto do produto (cenário de edição/visualização).
-    let searchUrl: string | undefined = this.product?._links?.['tipos-materia-prima']?.href?.split('{')[0];
-    // 2. Se não encontrar, busca o link na raiz da API (cenário de criação ou fallback).
-    if (!searchUrl) {
-      searchUrl = this.apiRoot.endpoints()?._links?.['tipos-materia-prima']?.href?.split('{')[0];
-    }
+    // Lógica HATEOAS robusta:
+    // 1. Tenta obter o link do objeto do produto (cenário ideal).
+    // 2. Se não encontrar, busca o link na raiz da API (fallback para cenários como getById que não retorna todos os links).
+    const searchUrl = this.product?._links?.['tipos-materia-prima']?.href?.split('{')[0]
+                   || this.apiRoot.endpoints()?._links?.['tipos-materia-prima']?.href?.split('{')[0];
+
     this.materialTypesSearchUrl = searchUrl ?? null;
 
     if (!this.materialTypesSearchUrl) {
-      console.error("URL para busca de matéria-prima não pôde ser determinada.");
+      console.error("URL para busca de matéria-prima não pôde ser determinada. O formulário será desabilitado.");
     }
 
     this.productForm = this.fb.group({
@@ -110,33 +110,34 @@ export class ProductFormComponent implements OnInit {
     }
 
     try {
+      // 1. Se houver uma nova imagem para upload, faça isso primeiro.
+      if (this.isEditMode && this.selectedFile) {
+        this.product = await this.uploadImage();
+      }
+
       const dirtyValues = this.getDirtyValues(this.productForm);
+      let hasSaved = false;
 
       if (this.isEditMode) {
-        if (!this.product.id) {
+        if (!this.product?.id) {
           console.error('ID do produto não encontrado, não é possível atualizar.', this.product);
           return;
         }
-        this.product = await lastValueFrom(this.productsService.patchProduct(this.product.id, dirtyValues));
+        // Só envia o patch se houver de fato alguma alteração no formulário.
+        if (Object.keys(dirtyValues).length > 0) {
+          this.product = await lastValueFrom(this.productsService.patchProduct(this.product.id, dirtyValues));
+        }
       } else { // Modo de Criação
         const formValue = this.productForm.getRawValue();
-
-        // Monta o payload para a API de criação, traduzindo os nomes dos campos.
-        const creationPayload = {
-          ...formValue,
-          tipoMateriaPrimaId: formValue.materiaPrima?.id,
-          dimensoesUnitarias: formValue.dimensoes,
-          materiaPrima: undefined, // Garante que o objeto materiaPrima não será enviado
-          dimensoes: undefined,    // Garante que o objeto dimensoes não será enviado
-        };
-
         // O serviço espera um Partial<Product>, então garantimos a compatibilidade.
-        await lastValueFrom(this.productsService.createProduct(creationPayload as Partial<Product>));
+        await lastValueFrom(this.productsService.createProduct(formValue as Partial<Product>));
       }
 
+      // Fecha o diálogo se a operação foi bem-sucedida.
       this.dialogRef.close(true);
     } catch (error) {
       console.error(this.isEditMode ? 'Erro ao atualizar o produto:' : 'Erro ao criar o produto:', error);
+      // TODO: Adicionar um MatSnackBar para notificar o usuário sobre o erro.
     }
   }
 
@@ -220,27 +221,34 @@ export class ProductFormComponent implements OnInit {
     const input = event.target as HTMLInputElement;
     if (input.files && input.files.length > 0) {
       this.selectedFile = input.files[0];
+      // Gera uma URL local para a pré-visualização da imagem
+      this.previewUrl.set(URL.createObjectURL(this.selectedFile));
     }
   }
 
-  async onUpload(): Promise<void> {
-    let uploadUrl = this.product?._links?.['upload-foto']?.href;
-    if (this.selectedFile && uploadUrl) {
-      this.isUploading.set(true);
-      try {
-        const updatedProduct = await lastValueFrom(
-          this.productsService.uploadProductPhoto(uploadUrl, this.selectedFile)
-        );
+  private async uploadImage(): Promise<Product> {
+    const uploadUrl = this.product?._links?.['upload-foto']?.href;
+    if (!this.selectedFile || !uploadUrl) {
+      // Se não houver arquivo ou URL, retorna o produto atual sem alterações.
+      return this.product;
+    }
 
-        this.product = updatedProduct;
-        this.selectedFile = null;
-        this.cdr.detectChanges();
-      } catch (err) {
-        console.error('Falha no upload da imagem:', err);
-        // TODO: Adicionar um MatSnackBar para notificar o usuário sobre o erro.
-      } finally {
-        this.isUploading.set(false);
-      }
+    this.isUploading.set(true);
+    try {
+      const updatedProduct = await lastValueFrom(
+        this.productsService.uploadProductPhoto(uploadUrl, this.selectedFile)
+      );
+      // Atualiza o produto local com a nova URL da imagem para feedback visual imediato.
+      this.selectedFile = null;
+      this.previewUrl.set(null); // Limpa a URL de preview
+      return updatedProduct;
+    } catch (err) {
+      console.error('Falha no upload da imagem:', err);
+      // TODO: Adicionar um MatSnackBar para notificar o usuário sobre o erro.
+      // Em caso de erro, rejeita a promessa para que o onSubmit pare.
+      throw err;
+    } finally {
+      this.isUploading.set(false);
     }
   }
 

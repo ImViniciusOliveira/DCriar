@@ -28,8 +28,8 @@ export class TopNavbar {
   readonly navLinksMap: Record<string, NavLink> = {
     dashboard: { path: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
     produtos: { path: 'produtos', label: 'Produtos', icon: 'inventory_2' },
-    sales: { path: 'sales', label: 'Vendas', icon: 'point_of_sale' },
-    'ordens-de-producao': { path: 'ordens-de-producao', label: 'Produção', icon: 'content_cut' },
+    vendas: { path: 'vendas', label: 'Vendas', icon: 'point_of_sale' },
+    'ordens-de-corte': { path: 'ordens-de-corte', label: 'Ordens de Corte', icon: 'content_cut' },
     'lotes-materia-prima': { path: 'lotes-materia-prima', label: 'Lotes', icon: 'view_in_ar' },
     'tipos-materia-prima': { path: 'tipos-materia-prima', label: 'Matérias-Primas', icon: 'category' },
   };
@@ -40,15 +40,16 @@ export class TopNavbar {
       return [];
     }
 
-    return Object.keys(endpoints._links)
+    // Use as chaves do navLinksMap como fonte da verdade para a ordem e disponibilidade.
+    return Object.keys(this.navLinksMap)
       .map((key) => this.navLinksMap[key])
       .filter(
         (navLink) => {
           if (!navLink) return false;
-          // Permite o link 'produtos' mesmo que seja templado, pois a rota base funciona.
-          if (navLink.path === 'produtos') return true;
-          // Para os outros links, mantém a lógica original de não mostrar se for templado.
-          return !endpoints._links[navLink.path]?.templated;
+          // Verifica se o endpoint correspondente existe na API.
+          // A chave no navLinksMap deve corresponder à chave no _links da API.
+          const endpointKey = Object.keys(this.navLinksMap).find(k => this.navLinksMap[k].path === navLink.path);
+          return endpointKey ? !!endpoints._links[endpointKey] : false;
         }
       );
   }
