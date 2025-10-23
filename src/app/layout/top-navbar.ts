@@ -29,9 +29,8 @@ export class TopNavbar {
     dashboard: { path: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
     produtos: { path: 'produtos', label: 'Produtos', icon: 'inventory_2' },
     vendas: { path: 'vendas', label: 'Vendas', icon: 'point_of_sale' },
-    'ordens-de-corte': { path: 'ordens-de-corte', label: 'Ordens de Corte', icon: 'content_cut' },
     'lotes-materia-prima': { path: 'lotes-materia-prima', label: 'Lotes', icon: 'view_in_ar' },
-    'tipos-materia-prima': { path: 'tipos-materia-prima', label: 'Matérias-Primas', icon: 'category' },
+    'ordens-de-producao': { path: 'ordens-de-producao', label: 'Ordens de Produção', icon: 'content_cut' },
   };
 
   get availableNavLinks(): NavLink[] {
@@ -40,17 +39,10 @@ export class TopNavbar {
       return [];
     }
 
-    // Use as chaves do navLinksMap como fonte da verdade para a ordem e disponibilidade.
     return Object.keys(this.navLinksMap)
-      .map((key) => this.navLinksMap[key])
-      .filter(
-        (navLink) => {
-          if (!navLink) return false;
-          // Verifica se o endpoint correspondente existe na API.
-          // A chave no navLinksMap deve corresponder à chave no _links da API.
-          const endpointKey = Object.keys(this.navLinksMap).find(k => this.navLinksMap[k].path === navLink.path);
-          return endpointKey ? !!endpoints._links[endpointKey] : false;
-        }
-      );
+      // Filtra as chaves do nosso mapa para incluir apenas aquelas que a API retornou em `_links`.
+      .filter(key => key in endpoints._links)
+      // Mapeia as chaves filtradas de volta para os objetos NavLink correspondentes.
+      .map(key => this.navLinksMap[key]);
   }
 }

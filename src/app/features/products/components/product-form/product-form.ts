@@ -16,7 +16,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { ConfirmDialog, ConfirmDialogData } from '../../../../shared/components/confirm-dialog/confirm-dialog/confirm-dialog';
 import { lastValueFrom } from 'rxjs';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { NgxMaskDirective, provideNgxMask } from 'ngx-mask';
+import { provideNgxMask } from 'ngx-mask';
 import { ApiRoot } from '../../../../core/services/api-root';
 
 const CONSUMPTION_UNITS = [
@@ -28,7 +28,7 @@ const CONSUMPTION_UNITS = [
 @Component({
   selector: 'app-product-form',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, MatDialogModule, MatFormFieldModule, MatSelectModule, MatInputModule, MatButtonModule, MatCheckboxModule, MatIconModule, InfiniteScrollDirective, MatProgressSpinnerModule, NgxMaskDirective],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, MatDialogModule, MatFormFieldModule, MatSelectModule, MatInputModule, MatButtonModule, MatCheckboxModule, MatIconModule, InfiniteScrollDirective, MatProgressSpinnerModule],
   providers: [provideNgxMask()],
   templateUrl: './product-form.html',
   styleUrls: ['./product-form.scss']

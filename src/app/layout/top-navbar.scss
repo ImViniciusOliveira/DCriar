@@ -5,6 +5,18 @@
   color: var(--mat-sys-on-surface);
 }
 
+.home-link {
+  font-size: 20px;
+  font-weight: 500;
+  text-decoration: none; // Remove o sublinhado padrão de links
+  color: inherit; // Herda a cor do texto da toolbar
+  transition: opacity 0.2s ease-in-out; // Adiciona uma transição suave
+
+  &:hover {
+    opacity: 0.8; // Deixa o link um pouco mais transparente ao passar o mouse
+  }
+}
+
 .spacer {
   flex: 1 1 auto;
 }
