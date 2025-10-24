@@ -14,17 +14,11 @@ import {
   ConfirmDialog,
   ConfirmDialogData,
 } from '../../../../shared/components/confirm-dialog/confirm-dialog/confirm-dialog';
-import { filter, catchError, of, lastValueFrom, forkJoin, map } from 'rxjs';
+import { filter, catchError, of, lastValueFrom, forkJoin, map, take, switchMap } from 'rxjs';
 import { ProductFormComponent, ProductFormData } from '../product-form/product-form';;
 import { MatCardModule } from '@angular/material/card';
 import { ApiRoot } from '../../../../core/services/api-root';
-
-const CHANNEL_NAME_MAP = new Map<string, string>([
-  ['LOJA_FISICA', 'Loja Física'],
-  ['SHOPEE', 'Shopee'],
-  ['SITE_PROPRIO', 'Site Próprio'],
-  ['MERCADO_LIVRE', 'Mercado Livre']
-]);
+import { SalesChannelService } from '../../services/sales-channel.service';
 
 @Component({
   selector: 'app-product-list',
@@ -58,6 +52,9 @@ export class ProductList implements OnInit {
   private readonly dialog = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
   private readonly apiRoot = inject(ApiRoot);
+  private readonly salesChannelService = inject(SalesChannelService);
+
+  private channelNameMap = new Map<string, string>();
 
   products = signal<Product[]>([]);
   isLoading = signal(false);
@@ -75,57 +72,77 @@ export class ProductList implements OnInit {
 
   ngOnInit(): void {
     this.loadProducts();
+    // Carrega o mapa de nomes de canais uma vez para uso no template
+    this.salesChannelService.channelNameMap$.pipe(take(1)).subscribe((mapData) => {
+      this.channelNameMap = mapData;
+    });
   }
 
-  async loadProducts(): Promise<void> {
+  loadProducts(): void {
     this.isLoading.set(true);
-    try {
-      console.log('[ProductList] loadProducts: Carregando com ordenação:', { active: this.sortActive(), direction: this.sortDirection() });
-      const sortString = `${this.sortActive()},${this.sortDirection()}`;
-      const productsResponse = await lastValueFrom(
-        this.productsService.getProducts(this.pageIndex(), this.pageSize(), sortString)
-      );
+    console.log('[ProductList] Iniciando carregamento completo...');
 
-      this.totalElements.set(productsResponse.page?.totalElements || 0);
-      const products = productsResponse?._embedded?.produtos || [];
+    // 1. GARANTE que os canais de venda estejam carregados ANTES de tudo.
+    this.salesChannelService.channelKeys$.pipe(
+      take(1), // Pega o valor atual (ou o primeiro emitido) e completa.
 
-      // Define os produtos inicialmente sem o estoque para a UI ser rápida
-      this.products.set(products);
+      // 2. COM OS CANAIS PRONTOS, busca os produtos.
+      // switchMap cancela a operação anterior e inicia uma nova (busca de produtos).
+      switchMap(() => {
+        console.log('[ProductList] Mapa de canais está pronto. Buscando produtos...');
+        const sortString = `${this.sortActive()},${this.sortDirection()}`;
+        return this.productsService.getProducts(this.pageIndex(), this.pageSize(), sortString);
+      }),
 
-      // Agora, busca o estoque para cada produto em paralelo
-      if (products.length > 0) {
+      // 3. COM OS PRODUTOS EM MÃOS, busca o estoque de todos em paralelo.
+      switchMap(productsResponse => {
+        const products = productsResponse?._embedded?.produtos || [];
+        this.totalElements.set(productsResponse.page?.totalElements || 0);
+
+        if (products.length === 0) {
+          console.log('[ProductList] Nenhum produto encontrado. Encerrando fluxo.');
+          return of([]); // Retorna um array vazio para o subscribe final.
+        }
+
+        console.log(`[ProductList] Produtos recebidos. Buscando estoque para ${products.length} produtos...`);
         const stockObservables = products.map(product =>
           this.productsService.getChannelStock(product).pipe(
             map(stock => ({ productId: product.id, stock })),
-            catchError(() => of({ productId: product.id, stock: {} })) // Em caso de erro, retorna estoque vazio
+            catchError(() => of({ productId: product.id, stock: {} })) // Em caso de erro, não quebra a cadeia.
           )
         );
 
-        forkJoin(stockObservables).subscribe(stocks => {
-          this.mergeStockData(stocks);
-        });
+        // forkJoin espera todas as chamadas de estoque terminarem.
+        // Usamos um map para combinar a lista original de produtos com os estoques recebidos.
+        return forkJoin(stockObservables).pipe(
+          map(stocks => this.mergeStockData(products, stocks))
+        );
+      })
+    ).subscribe({
+      // 4. O SUBSCRIBE FINAL apenas recebe os dados prontos e atualiza a UI.
+      next: (finalProducts) => {
+        console.log('[ProductList] Dados finais mesclados. Atualizando a tabela.');
+        this.products.set(finalProducts);
+        this.isLoading.set(false);
+      },
+      error: (error) => {
+        console.error('Erro ao carregar produtos:', error);
+        this.snackBar.open(ProductList.Texts.loadError, 'Fechar', { duration: 5000 });
+        this.isLoading.set(false);
       }
-    } catch (error) {
-      console.error('Erro ao carregar produtos:', error);
-      this.snackBar.open(ProductList.Texts.loadError, 'Fechar', { duration: 5000 });
-    } finally {
-      this.isLoading.set(false);
-    }
+    });
   }
 
-  private mergeStockData(stocks: { productId: number; stock: { [key: string]: number } }[]): void {
+  // Esta função agora é puramente síncrona. Ela recebe tudo o que precisa e retorna o resultado.
+  private mergeStockData(products: Product[], stocks: { productId: number; stock: { [key: string]: number } }[]): Product[] {
     const stockMap = new Map(stocks.map(s => [s.productId, s.stock]));
-    const baseChannelStock = Object.fromEntries(Array.from(CHANNEL_NAME_MAP.keys()).map(key => [key, 0]));
+    const channelKeys = Array.from(this.channelNameMap.keys());
+    const baseChannelStock = Object.fromEntries(channelKeys.map(key => [key, 0]));
 
-    this.products.update(currentProducts => {
-      return currentProducts.map(product => {
-        const productChannelStock = stockMap.get(product.id) || {};
-        return {
-          ...product, // Mantém o produto original
-          // Cria um novo objeto de estoque mesclado para garantir a reatividade
-          estoquePorCanal: { ...baseChannelStock, ...productChannelStock }
-        };
-      });
+    return products.map(product => {
+      const productSpecificStock = stockMap.get(product.id) || {};
+      const finalStock = { ...baseChannelStock, ...productSpecificStock };
+      return { ...product, estoquePorCanal: finalStock };
     });
   }
 
@@ -166,7 +183,7 @@ export class ProductList implements OnInit {
         }
         await lastValueFrom(this.productsService.deleteProduct(deleteUrl));
         this.snackBar.open(ProductList.Texts.deleteSuccess, 'Fechar', { duration: 3000 });
-        await this.loadProducts();
+        this.loadProducts();
       } catch (error) {
         console.error('Erro ao excluir produto:', error);
         this.snackBar.open(ProductList.Texts.deleteError, 'Fechar', { duration: 3000 });
@@ -240,7 +257,7 @@ export class ProductList implements OnInit {
   }
 
   getChannelDisplayName(channelKey: string): string {
-    return CHANNEL_NAME_MAP.get(channelKey) || channelKey;
+    return this.channelNameMap.get(channelKey) || channelKey;
   }
 
   trackByProductId(index: number, product: Product): number {

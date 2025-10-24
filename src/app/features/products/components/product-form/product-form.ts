@@ -73,8 +73,8 @@ export class ProductFormComponent implements OnInit {
     // Lógica HATEOAS robusta:
     // 1. Tenta obter o link do objeto do produto (cenário ideal).
     // 2. Se não encontrar, busca o link na raiz da API (fallback para cenários como getById que não retorna todos os links).
-    const searchUrl = this.product?._links?.['tipos-materia-prima']?.href?.split('{')[0]
-                   || this.apiRoot.endpoints()?._links?.['tipos-materia-prima']?.href?.split('{')[0];
+    const searchUrl = this.product?._links?.['buscar-tipos-materia-prima']?.href?.split('{')[0]
+                   || this.apiRoot.endpoints()?._links?.['buscar-tipos-materia-prima']?.href?.split('{')[0];
 
     this.materialTypesSearchUrl = searchUrl ?? null;
 

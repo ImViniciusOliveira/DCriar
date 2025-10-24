@@ -7,6 +7,7 @@ import { ApiRoot } from '../../../core/services/api-root';
 import { Hateoas } from '../../../core/models/hateoas.model';
 import { ApiResponseProducts, Product } from '../models/products.model';
 import { Channel, ProductChannelStock } from '../../stock/models/channel-stock.model';
+import { SalesChannelService } from './sales-channel.service';
 
 @Injectable({
   providedIn: 'root',
@@ -14,6 +15,7 @@ import { Channel, ProductChannelStock } from '../../stock/models/channel-stock.m
 export class ProductsService {
   private readonly http = inject(HttpClient);
   private readonly apiRoot = inject(ApiRoot);
+  private readonly salesChannelService = inject(SalesChannelService);
 
   private readonly refresh$ = new BehaviorSubject<void>(undefined);
 
@@ -111,12 +113,20 @@ export class ProductsService {
     if (!stockUrl) {
       return of({});
     }
+
+    // A lógica de conversão não é mais necessária, pois usaremos o nome do canal como chave.
     return this.http.get<ProductChannelStock>(stockUrl).pipe(
       map(response => {
-        if (!response || !Array.isArray(response.canais)) {
+        const stockEntries = response?.canais || [];
+        console.log(`[ProductsService] Resposta bruta de estoque para o produto ID ${product.id}:`, stockEntries);
+        if (stockEntries.length === 0) {
           return {};
         }
-        return this.createChannelMap(response.canais);
+        return this.createChannelMap(stockEntries);
+      }),
+      catchError(err => {
+        console.error(`Erro ao buscar estoque para o produto ID ${product.id}:`, err);
+        return of({}); // Em caso de erro, retorna um objeto de estoque vazio para não quebrar o fluxo principal.
       })
     );
   }
@@ -165,9 +175,13 @@ export class ProductsService {
   }
 
   private createChannelMap(channels: Channel[]): { [key: string]: number } {
-    return channels.reduce((acc, channel) => {
+    const finalMap = channels.reduce((acc, channel) => {
+      // Usa o próprio nome do canal como chave.
       acc[channel.canalNome] = channel.quantidade;
       return acc;
     }, {} as { [key: string]: number });
+
+    console.log('[ProductsService] Mapa de estoque final criado:', finalMap);
+    return finalMap;
   }
 }
