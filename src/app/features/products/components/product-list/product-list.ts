@@ -85,7 +85,6 @@ export class ProductList implements OnInit {
       take(1), // Pega o primeiro valor e completa
       switchMap(url => this.enumService.getConsumptionUnitsMap(url)) // Usa o novo método do EnumService
     ).subscribe(map => {
-      console.log('[ProductList] Mapa de unidades de consumo carregado:', map);
       this.consumptionUnitsMap.set(map); // Atualiza o signal
     });
     // Carrega o mapa de nomes de canais uma vez para uso no template
@@ -116,11 +115,9 @@ export class ProductList implements OnInit {
         this.totalElements.set(productsResponse.page?.totalElements || 0);
 
         if (products.length === 0) {
-          console.log('[ProductList] Nenhum produto encontrado. Encerrando fluxo.');
           return of([]); // Retorna um array vazio para o subscribe final.
         }
 
-        console.log(`[ProductList] Produtos recebidos. Buscando estoque para ${products.length} produtos...`);
         const stockObservables = products.map(product =>
           this.productsService.getChannelStock(product).pipe(
             map(stock => ({ productId: product.id, stock })),
@@ -137,7 +134,6 @@ export class ProductList implements OnInit {
     ).subscribe({
       // 4. O SUBSCRIBE FINAL apenas recebe os dados prontos e atualiza a UI.
       next: (finalProducts) => {
-        console.log('[ProductList] Dados finais mesclados. Atualizando a tabela.');
         this.products.set(finalProducts);
         this.isLoading.set(false);
       },

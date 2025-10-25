@@ -29,7 +29,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
   templateUrl: './product-form.html',
   styleUrls: ['./product-form.scss']
 })
-export class ProductFormComponent implements OnInit {
+export class ProductFormComponent implements OnInit { // Removido OnDestroy, pois destroy$ não é mais necessário
   private static readonly CONFIRM_CHANGE_TITLE = 'Confirmar Alteração';
   private static readonly CONFIRM_CHANGE_MESSAGE = (original: string, novo: string) =>
     `Deseja realmente alterar a matéria-prima de "${original}" para "${novo}"?`;
@@ -55,7 +55,7 @@ export class ProductFormComponent implements OnInit {
   private readonly currentPage = signal(0);
   private readonly pageSize = 20;
   private readonly totalElements = signal(0);
-  private readonly materialTypesSearchUrl: string | null = null;
+  private readonly materialTypesSearchUrl: string | null;
 
   readonly consumptionUnits$: Observable<EnumOption[]>;
   readonly consumptionUnits: Signal<EnumOption[]>;
@@ -124,45 +124,47 @@ export class ProductFormComponent implements OnInit {
       return;
     }
 
-    try {
-      // 1. Se houver uma nova imagem para upload, faça isso primeiro.
-      if (this.isEditMode && this.selectedFile) {
-        this.product = await this.uploadImage();
-      }
+    if (this.isEditMode) {
+      try {
+        if (this.selectedFile) {
+          this.product = await this.uploadImage();
+        }
 
-      const dirtyValues = this.getDirtyValues(this.productForm);
-
-      if (this.isEditMode) {
         if (!this.product?.id) {
           console.error('ID do produto não encontrado, não é possível atualizar.', this.product);
           return;
         }
-        // Só envia o patch se houver de fato alguma alteração no formulário.
+        const dirtyValues = this.getDirtyValues(this.productForm);
         if (Object.keys(dirtyValues).length > 0) {
-          console.log('[ProductForm] Enviando para PATCH:', dirtyValues);
           this.product = await lastValueFrom(this.productsService.patchProduct(this.product.id, dirtyValues));
         }
-      } else { // Modo de Criação
-        const formValue = this.productForm.getRawValue();
-        // O serviço espera um Partial<Product>, então garantimos a compatibilidade.
-        await lastValueFrom(this.productsService.createProduct(formValue as Partial<Product>));
+        // Desconecta o componente da detecção de mudanças ANTES de fechar.
+        this.cdr.detach();
+        this.dialogRef.close(true);
+      } catch (error) {
+        console.error('Erro ao atualizar o produto:', error instanceof Error ? error.message : error);
       }
-
-      // Fecha o diálogo se a operação foi bem-sucedida.
-      this.dialogRef.close(true);
-    } catch (error) {
-      console.error(this.isEditMode ? 'Erro ao atualizar o produto:' : 'Erro ao criar o produto:', error instanceof Error ? error.message : error);
-      // TODO: Adicionar um MatSnackBar para notificar o usuário sobre o erro.
-      // Não fechamos o diálogo em caso de erro para que o usuário possa tentar novamente.
+    } else { // Modo de Criação
+      try {
+        // Desconecta o componente da detecção de mudanças ANTES de fechar.
+        this.cdr.detach();
+        const formValue = this.productForm.getRawValue();
+        await lastValueFrom(this.productsService.createProduct(formValue as Partial<Product>));
+        this.dialogRef.close(true);
+      } catch (error) {
+        console.error('Erro ao criar o produto:', error instanceof Error ? error.message : error);
+      }
     }
   }
 
   ngOnInit(): void {
-    if (this.isEditMode) {
-      if (this.product.materiaPrima) {
-        this.materialTypes.set([this.product.materiaPrima]);
-      }
+    // No modo de edição, pré-populamos a lista apenas com a matéria-prima atual do produto
+    // para que ela já apareça selecionada. A busca completa só ocorrerá com a interação do usuário.
+    if (this.isEditMode && this.product.materiaPrima) {
+      this.materialTypes.set([this.product.materiaPrima]);
     }
+    // Nos modos de criação e visualização, a lista de matérias-primas começa vazia,
+    // aguardando a ação do usuário para ser populada.
   }
 
   async performSearch(): Promise<void> {
@@ -170,18 +172,17 @@ export class ProductFormComponent implements OnInit {
 
     try {
       this.currentPage.set(0);
-
-      const initialMaterialTypes = (this.isEditMode && this.product.materiaPrima)
-        ? [this.product.materiaPrima]
-        : [];
-      this.materialTypes.set(initialMaterialTypes);
+      // Sempre limpa os tipos de matéria-prima existentes para uma nova busca
+      this.materialTypes.set([]);
+      // Limpa a seleção atual do dropdown para evitar que um valor antigo seja mantido.
+      this.productForm.get('materiaPrima')?.reset();
 
       if (!this.materialTypesSearchUrl) {
         console.error("Não é possível buscar matérias-primas: URL não encontrada no produto.");
         return;
       }
 
-      const filters = this.searchForm.value;
+      const filters = { nome: this.searchForm.value.searchName, unidadeDeConsumo: this.searchForm.value.searchUnit };
 
       const response = await lastValueFrom(
         this.materialTypeService.searchMaterialTypes(
@@ -192,13 +193,11 @@ export class ProductFormComponent implements OnInit {
         )
       );
 
-      const newMaterials = response._embedded['tipos-materia-prima'];
+      // Acesso seguro: se a busca não retornar nada (`_embedded` for undefined), `newMaterials` será um array vazio.
+      const newMaterials = response?._embedded?.['tipos-materia-prima'] || [];
 
-      this.materialTypes.update(currentTypes => {
-        const currentIds = new Set(currentTypes.map(t => t.id));
-        const filteredNew = newMaterials.filter(t => !currentIds.has(t.id));
-        return [...currentTypes, ...filteredNew];
-      });
+      // A lista de resultados agora contém apenas o que foi retornado pela busca.
+      this.materialTypes.set(newMaterials);
       this.totalElements.set(response.page.totalElements);
     } catch (err) {
       console.error('Erro na busca por matéria-prima:', err);
@@ -219,11 +218,13 @@ export class ProductFormComponent implements OnInit {
 
       if (!this.materialTypesSearchUrl) return;
 
-      const filters = this.searchForm.value;
+      const filters = { nome: this.searchForm.value.searchName, unidadeDeConsumo: this.searchForm.value.searchUnit };
 
       const response = await lastValueFrom(this.materialTypeService.searchMaterialTypes(this.materialTypesSearchUrl, filters, this.currentPage(), this.pageSize));
 
-      this.materialTypes.update(currentTypes => [...currentTypes, ...response._embedded['tipos-materia-prima']]);
+      // Acesso seguro também no `loadMore`.
+      const newMaterials = response?._embedded?.['tipos-materia-prima'] || [];
+      this.materialTypes.update(currentTypes => [...currentTypes, ...newMaterials]);
     } catch (err) {
       console.error('Erro ao carregar mais matérias-primas:', err);
     } finally {

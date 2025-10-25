@@ -50,22 +50,14 @@ export class EnumService {
   }
 
   getEnumOptions(url: string): Observable<EnumOption[]> {
-    console.log(`[EnumService] getEnumOptions called for URL: ${url}`);
     if (!this.cache[url]) {
-      console.log(`[EnumService] Making new request for URL: ${url}`);
       this.cache[url] = this.http.get<EmbeddedEnumResponse>(url).pipe(
         map(response => {
-          console.log('[EnumService] Raw response from API:', response);
           // Extrai o primeiro array encontrado dentro do objeto _embedded
           const embedded = response?._embedded;
-          if (!embedded) {
-            console.log('[EnumService] _embedded object not found. Returning empty array.');
-            return [];
-          }
 
           const key = Object.keys(embedded)[0];
           const items = embedded[key] || [];
-          console.log(`[EnumService] Found ${items.length} items under key '${key}'.`);
 
           // Mapeia os campos 'name' e 'descricao' para 'value' e 'viewValue' com segurança de tipo.
           const mappedItems = items.map(item => ({
@@ -73,7 +65,6 @@ export class EnumService {
             viewValue: item.descricao,
             simbolo: item.simbolo
           }));
-          console.log('[EnumService] Mapped items being returned:', mappedItems);
           return mappedItems;
         }),
         shareReplay(1),

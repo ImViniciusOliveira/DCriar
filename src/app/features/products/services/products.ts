@@ -39,7 +39,6 @@ export class ProductsService {
       // CONSTRÓI a URL final para a primeira chamada e executa.
       switchMap(baseUrl => {
         const finalUrl = `${baseUrl}?page=${page}&size=${size}&sort=${sort}`;
-        console.log('[ProductsService] getProducts: URL final construída:', finalUrl);
         return this.http.get<ApiResponseProducts>(finalUrl);
       }),
       catchError(err => {
@@ -91,12 +90,11 @@ export class ProductsService {
       delete product.id;
     }
 
-    console.log('[ProductsService] Payload do PATCH:', product);
-
     return this.endpoints$.pipe(
       map(endpoints => this.getProductBaseUrl(endpoints)),
       switchMap(baseUrl => this.http.patch<Product>(`${baseUrl}/${productId}`, product)),
-      tap(() => this.refresh$.next())
+      tap(() => this.refresh$.next()),
+      take(1) // Garante que o Observable complete após a primeira emissão (a resposta do PATCH).
     );
   }
 
@@ -122,7 +120,6 @@ export class ProductsService {
     return this.http.get<ProductChannelStock>(stockUrl).pipe(
       map(response => {
         const stockEntries = response?.canais || [];
-        console.log(`[ProductsService] Resposta bruta de estoque para o produto ID ${product.id}:`, stockEntries);
         if (stockEntries.length === 0) {
           return {};
         }
@@ -174,7 +171,6 @@ export class ProductsService {
       return acc;
     }, {} as { [key: string]: number });
 
-    console.log('[ProductsService] Mapa de estoque final criado:', finalMap);
     return finalMap;
   }
 }

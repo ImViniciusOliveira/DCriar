@@ -1,6 +1,6 @@
 <h2 mat-dialog-title>{{ data.title }}</h2>
 @if (isEditMode || data.isCreationMode) {
-  <form [formGroup]="productForm" (ngSubmit)="onSubmit()">
+  <form [formGroup]="productForm" (ngSubmit)="onSubmit()" (keydown.enter)="$event.preventDefault()">
     <mat-dialog-content>
         <div class="form-row">
           <mat-form-field class="full-width">
@@ -71,6 +71,12 @@
               <mat-icon>search</mat-icon>
             </button>
           </div>
+          @if (isEditMode && product.materiaPrima) {
+            <p class="original-material-info">
+              Matéria-Prima Original: <strong>{{ product.materiaPrima.nome }}
+                ({{ getConsumptionUnitViewValue(product.materiaPrima.unidadeDeConsumo) }})</strong>
+            </p>
+          }
           <mat-form-field class="full-width">
             <mat-label>Tipo de Matéria Prima</mat-label>
             <mat-select
