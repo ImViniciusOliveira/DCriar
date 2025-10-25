@@ -61,7 +61,8 @@
               <mat-label>Filtrar por Unidade</mat-label>
               <mat-select formControlName="searchUnit">
                 <mat-option value="">Todos</mat-option>
-                @for (unit of consumptionUnits; track unit.value) {
+
+                @for (unit of consumptionUnits(); track unit.value) {
                   <mat-option [value]="unit.value">{{ unit.viewValue }}</mat-option>
                 }
               </mat-select>

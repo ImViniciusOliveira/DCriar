@@ -19,6 +19,7 @@ import { ProductFormComponent, ProductFormData } from '../product-form/product-f
 import { MatCardModule } from '@angular/material/card';
 import { ApiRoot } from '../../../../core/services/api-root';
 import { SalesChannelService } from '../../services/sales-channel.service';
+import { EnumOption, EnumService } from '../../../../core/services/enum.service';
 
 @Component({
   selector: 'app-product-list',
@@ -53,8 +54,9 @@ export class ProductList implements OnInit {
   private readonly snackBar = inject(MatSnackBar);
   private readonly apiRoot = inject(ApiRoot);
   private readonly salesChannelService = inject(SalesChannelService);
+  private readonly enumService = inject(EnumService);
 
-  private channelNameMap = new Map<string, string>();
+  private channelNameMap = new Map<string, string>(); // Pode ser convertido para signal se houver necessidade de reatividade
 
   products = signal<Product[]>([]);
   isLoading = signal(false);
@@ -68,10 +70,24 @@ export class ProductList implements OnInit {
   sortActive = signal('nome');
   sortDirection = signal<Sort['direction']>('asc');
 
+  // Usar um signal para o mapa de unidades de consumo para consistência e reatividade
+  readonly consumptionUnitsMap = signal(new Map<string, EnumOption>());
+
   @ViewChild(MatPaginator) paginator!: MatPaginator;
 
   ngOnInit(): void {
     this.loadProducts();
+    // Carrega o mapa de unidades de consumo para "traduzir" os valores na tabela
+    this.apiRoot.endpoints$.pipe(
+      filter(endpoints => !!endpoints), // Garante que os endpoints da API raiz foram carregados
+      map(endpoints => endpoints._links?.['unidades-de-medida']?.href), // Obtém o link HATEOAS
+      filter((url): url is string => !!url), // Garante que a URL existe
+      take(1), // Pega o primeiro valor e completa
+      switchMap(url => this.enumService.getConsumptionUnitsMap(url)) // Usa o novo método do EnumService
+    ).subscribe(map => {
+      console.log('[ProductList] Mapa de unidades de consumo carregado:', map);
+      this.consumptionUnitsMap.set(map); // Atualiza o signal
+    });
     // Carrega o mapa de nomes de canais uma vez para uso no template
     this.salesChannelService.channelNameMap$.pipe(take(1)).subscribe((mapData) => {
       this.channelNameMap = mapData;
@@ -254,6 +270,10 @@ export class ProductList implements OnInit {
       this.snackBar.open(successMessage, 'Fechar', { duration: 3000 });
       this.loadProducts();
     });
+  }
+
+  getConsumptionUnitViewValue(key: string): string {
+    return this.consumptionUnitsMap().get(key)?.viewValue ?? key; // Acessa o valor do signal
   }
 
   getChannelDisplayName(channelKey: string): string {

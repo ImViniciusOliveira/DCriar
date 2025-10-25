@@ -19,7 +19,6 @@ export class ApiRoot {
   constructor() {
     // O shareReplay garante que a requisição só será feita uma vez.
     this.endpoints$ = this.loadEndpoints();
-    this.endpoints$.subscribe();
   }
 
   loadEndpoints(): Observable<Hateoas> {

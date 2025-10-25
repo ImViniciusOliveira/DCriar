@@ -1,6 +1,6 @@
 import { InfiniteScrollDirective } from './../../../stock/services/infinite-scroll.directive';
 import { CommonModule } from '@angular/common';
-import { ChangeDetectorRef, Component, Inject, OnInit, WritableSignal, inject, signal } from '@angular/core';
+import { ChangeDetectorRef, Component, Inject, OnInit, WritableSignal, computed, inject, signal, Signal } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { Product } from '../../models/products.model';
 import { FormArray, FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -14,16 +14,12 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatIconModule } from '@angular/material/icon';
 import { ConfirmDialog, ConfirmDialogData } from '../../../../shared/components/confirm-dialog/confirm-dialog/confirm-dialog';
-import { lastValueFrom } from 'rxjs';
+import { Observable, lastValueFrom, of, map } from 'rxjs';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { provideNgxMask } from 'ngx-mask';
 import { ApiRoot } from '../../../../core/services/api-root';
-
-const CONSUMPTION_UNITS = [
-  { value: 'CENTIMETRO_QUADRADO', viewValue: 'Centímetro Quadrado' },
-  { value: 'UNIDADE', viewValue: 'Unidade' },
-  { value: 'METRO_LINEAR', viewValue: 'Metro Linear' }
-];
+import { EnumOption, EnumService } from '../../../../core/services/enum.service';
+import { toSignal } from '@angular/core/rxjs-interop';
 
 @Component({
   selector: 'app-product-form',
@@ -47,6 +43,7 @@ export class ProductFormComponent implements OnInit {
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly dialog = inject(MatDialog);
   private readonly apiRoot = inject(ApiRoot);
+  private readonly enumService = inject(EnumService);
 
   searchForm: FormGroup;
   materialTypes: WritableSignal<MaterialType[]> = signal([]);
@@ -60,7 +57,9 @@ export class ProductFormComponent implements OnInit {
   private readonly totalElements = signal(0);
   private readonly materialTypesSearchUrl: string | null = null;
 
-  readonly consumptionUnits = CONSUMPTION_UNITS;
+  readonly consumptionUnits$: Observable<EnumOption[]>;
+  readonly consumptionUnits: Signal<EnumOption[]>;
+  private readonly consumptionUnitsMap = computed(() => new Map(this.consumptionUnits().map(u => [u.value, u.viewValue])));
 
   constructor(
     public dialogRef: MatDialogRef<ProductFormComponent>,
@@ -72,15 +71,29 @@ export class ProductFormComponent implements OnInit {
 
     // Lógica HATEOAS robusta:
     // 1. Tenta obter o link do objeto do produto (cenário ideal).
-    // 2. Se não encontrar, busca o link na raiz da API (fallback para cenários como getById que não retorna todos os links).
-    const searchUrl = this.product?._links?.['buscar-tipos-materia-prima']?.href?.split('{')[0]
-                   || this.apiRoot.endpoints()?._links?.['buscar-tipos-materia-prima']?.href?.split('{')[0];
+    // 2. Se não encontrar, busca o link na raiz da API (fallback).
+    const getUrl = (link: string) => this.product?._links?.[link]?.href?.split('{')[0]
+                                  || this.apiRoot.endpoints()?._links?.[link]?.href?.split('{')[0];
+
+    const searchUrl = getUrl('buscar-tipos-materia-prima');
+    const unitsUrl = getUrl('unidades-de-medida');
 
     this.materialTypesSearchUrl = searchUrl ?? null;
 
     if (!this.materialTypesSearchUrl) {
       console.error("URL para busca de matéria-prima não pôde ser determinada. O formulário será desabilitado.");
     }
+
+    if (unitsUrl) {
+      this.consumptionUnits$ = this.enumService.getConsumptionUnitsMap(unitsUrl).pipe(
+        map(unitsMap => Array.from(unitsMap.values()))
+      );
+    } else {
+      console.error("URL para unidades de medida não pôde ser determinada.");
+      this.consumptionUnits$ = of([]); // Define um array vazio se a URL não for encontrada
+    }
+
+    this.consumptionUnits = toSignal(this.consumptionUnits$, { initialValue: [] });
 
     this.productForm = this.fb.group({
       nome: [this.product.nome, Validators.required],
@@ -149,8 +162,6 @@ export class ProductFormComponent implements OnInit {
       if (this.product.materiaPrima) {
         this.materialTypes.set([this.product.materiaPrima]);
       }
-    } else { // Modo de criação
-      this.performSearch();
     }
   }
 
@@ -288,8 +299,7 @@ export class ProductFormComponent implements OnInit {
   }
 
   getConsumptionUnitViewValue(value: string): string {
-    const unit = CONSUMPTION_UNITS.find(u => u.value === value);
-    return unit ? unit.viewValue : value;
+    return this.consumptionUnitsMap().get(value) ?? value;
   }
 
   compareMaterialTypes(o1: MaterialType, o2: MaterialType): boolean {

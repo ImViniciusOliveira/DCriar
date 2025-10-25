@@ -26,16 +26,22 @@ export class ProductsService {
 
   getProducts(page: number = 0, size: number = 10, sort: string = 'nome,ASC'): Observable<ApiResponseProducts> {
     return this.endpoints$.pipe(
-      take(1), // Pega o valor atual dos endpoints e completa.
+      take(1),
       map(endpoints => {
-        const baseUrl = this.getProductUrl(endpoints);
-        console.log('[ProductsService] getProducts: URL base (templada) obtida:', baseUrl);
-        const finalUrl = baseUrl.replace('{?page,size,sort}', `?page=${page}&size=${size}&sort=${sort}`);
-        console.log('[ProductsService] getProducts: URL final construída:', finalUrl);
-        return finalUrl;
+        const productsRootUrl = endpoints._links?.['produtos']?.href;
+        if (!productsRootUrl) {
+          // Se o link principal de produtos não for encontrado, a aplicação não pode continuar.
+          throw new Error('URL de produtos não encontrada na resposta da API raiz.');
+        }
+        // Remove qualquer template, caso exista (boa prática).
+        return productsRootUrl.split('{')[0];
       }),
-      switchMap(url => this.http.get<ApiResponseProducts>(url)),
-      map(response => this.transformProductResponse(response, size)),
+      // CONSTRÓI a URL final para a primeira chamada e executa.
+      switchMap(baseUrl => {
+        const finalUrl = `${baseUrl}?page=${page}&size=${size}&sort=${sort}`;
+        console.log('[ProductsService] getProducts: URL final construída:', finalUrl);
+        return this.http.get<ApiResponseProducts>(finalUrl);
+      }),
       catchError(err => {
         console.error(`Falha ao buscar produtos na página ${page}, tamanho ${size}`, err);
         return of({ _embedded: { produtos: [] }, _links: {}, page: { size: 0, totalElements: 0, totalPages: 0, number: 0 } } as ApiResponseProducts);
@@ -46,7 +52,7 @@ export class ProductsService {
   getNewProductTemplate(): Observable<Product> {
     return this.endpoints$.pipe(
       // O template de um novo produto é um sub-recurso da coleção de produtos.
-      map(endpoints => this.getProductUrl(endpoints).split('{')[0]),
+      map(endpoints => this.getProductBaseUrl(endpoints)),
       switchMap(baseUrl => this.http.get<Product>(`${baseUrl}/new`)),
       take(1)
     );
@@ -54,7 +60,7 @@ export class ProductsService {
 
   getProductById(id: number): Observable<Product> {
     return this.endpoints$.pipe(
-      map(endpoints => this.getProductUrl(endpoints).split('{')[0]),
+      map(endpoints => this.getProductBaseUrl(endpoints)),
       switchMap(baseUrl => this.http.get<Product>(`${baseUrl}/${id}`)),
       take(1)
     );
@@ -74,9 +80,7 @@ export class ProductsService {
     const payload = this.mapToPayload(product);
     return this.endpoints$.pipe(
       take(1),
-      map(endpoints => {
-        return this.getProductUrl(endpoints).split('{')[0]; // Remove o template da URL
-      }),
+      map(endpoints => this.getProductBaseUrl(endpoints)),
       switchMap(url => this.http.post<Product>(url, payload)),
       tap(() => this.refresh$.next()) // O tap aqui retorna o que o switchMap emitiu, que é o Produto.
     );
@@ -90,7 +94,7 @@ export class ProductsService {
     console.log('[ProductsService] Payload do PATCH:', product);
 
     return this.endpoints$.pipe(
-      map(endpoints => this.getProductUrl(endpoints).split('{')[0]),
+      map(endpoints => this.getProductBaseUrl(endpoints)),
       switchMap(baseUrl => this.http.patch<Product>(`${baseUrl}/${productId}`, product)),
       tap(() => this.refresh$.next())
     );
@@ -131,23 +135,12 @@ export class ProductsService {
     );
   }
 
-  private getProductUrl(endpoints: Hateoas): string {
-    // Confia 100% no HATEOAS para o link paginado.
-    const url = endpoints?._links?.['produtos-paged']?.href;
+  private getProductBaseUrl(endpoints: Hateoas): string {
+    const url = endpoints?._links?.['produtos']?.href;
     if (!url) {
       throw new Error('URL de produtos não encontrada na resposta da API');
     }
-    return url;
-  }
-
-  private transformProductResponse(response: any, size: number): ApiResponseProducts {
-    return {
-      ...response,
-      _links: response._links || {},
-      page: {
-        ...response.page,
-      },
-    };
+    return url.split('{')[0]; // Remove qualquer parte de template
   }
 
   /**
